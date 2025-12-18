@@ -1,0 +1,130 @@
+/* Estils generals i per a mòbils (Mobile-First) */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f7f6;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    max-width: 600px;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+header {
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8em;
+    color: #0078c3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.logo {
+    height: 40px;
+}
+
+header p {
+    margin: 5px 0 0;
+    color: #666;
+}
+
+.selection-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#station-select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1em;
+    background-color: #fff;
+}
+
+#results-container {
+    margin-top: 25px;
+}
+
+.line-info {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.line-header {
+    padding: 10px 15px;
+    font-weight: bold;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.train-list {
+    padding: 15px;
+    background-color: #f9f9f9;
+}
+
+.train {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.train:last-child {
+    border-bottom: none;
+}
+
+.train-destination {
+    font-weight: 500;
+}
+
+.train-arrival {
+    font-weight: bold;
+    color: #d9534f;
+}
+
+.error {
+    /* Keep the red color for visibility, but remove the container style */
+    color: #d9534f;
+    margin-top: 20px;
+    text-align: center;
+}
+
+#timestamp-container {
+    text-align: right;
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 15px;
+}
+
+footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    color: #999;
+    font-size: 0.9em;
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMB Metro Next Trains</title>
+    <!-- Choices.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1><img src="https://static-web.tmb.cat/o/tmb-theme/images/logo_TMB_new.png" alt="Logo TMB" class="logo"> Metro TMB</h1>
+            <p>Check the arrival times for the next trains.</p>
+        </header>
+
+        <main>
+            <div class="selection-form">
+                <label for="station-select">Choose a station:</label>
+                <select id="station-select" name="stations">
+                    <option value="">Loading stations...</option>
+                </select>
+            </div>
+
+            <div id="timestamp-container"></div>
+            <div id="results-container">
+            </div>
+            <div id="error-message" class="error"></div>
+        </main>
+        <footer>Made by @bodi</footer>
+    </div>
+
+    <!-- Choices.js JS -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
