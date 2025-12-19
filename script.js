@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const FALLBACK_APP_KEY = '8504ae3a636b155724a1c7e140ee039f';
     const FALLBACK_API_URL = 'https://api.tmb.cat/v1/transit/core/horaris/';
     const STATIONS_CSV_PATH = 'estacions_linia.csv';
+    const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
+    const DEBUG_MODE = false; // Set to true for development debugging
 
     // --- DOM Elements ---
     const stationSelect = document.getElementById('station-select');
@@ -15,10 +17,150 @@ document.addEventListener('DOMContentLoaded', () => {
     const timestampContainer = document.getElementById('timestamp-container');
 
     // --- State Management ---
-    let autoRefreshIntervalId = null; // To hold the interval ID for auto-refreshing
-    let countdownIntervalIds = []; // To hold all active countdown interval IDs
-    let choicesInstance = null; // To hold the Choices.js instance
-    let abortController = null; // To handle cancellation of fetch requests
+    let autoRefreshIntervalId = null;
+    let countdownIntervalIds = [];
+    let choicesInstance = null;
+    let abortController = null;
+    let fallbackDataCache = new Map(); // Cache fallback API responses by station code
+
+    // --- Utility Functions ---
+    /**
+     * Conditional logging for debug mode
+     */
+    const debugLog = (...args) => {
+        if (DEBUG_MODE) console.log(...args);
+    };
+
+    /**
+     * Converts a station name to a URL-friendly slug
+     * @param {string} stationName - The station name to convert
+     * @returns {string} URL-friendly slug
+     */
+    function stationNameToSlug(stationName) {
+        return stationName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remove accents
+            .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+            .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+    }
+
+    /**
+     * Converts a URL slug back to a station name (finds closest match)
+     * @param {string} slug - The URL slug
+     * @param {Array} stations - Array of station objects with name property
+     * @returns {string|null} Station name or null if not found
+     */
+    function slugToStationName(slug, stations) {
+        const normalizedSlug = slug.toLowerCase();
+        // Try exact match first
+        const exactMatch = stations.find(s => 
+            stationNameToSlug(s.name) === normalizedSlug
+        );
+        if (exactMatch) return exactMatch.name;
+        
+        // Try partial match
+        const partialMatch = stations.find(s => 
+            stationNameToSlug(s.name).includes(normalizedSlug) ||
+            normalizedSlug.includes(stationNameToSlug(s.name))
+        );
+        return partialMatch ? partialMatch.name : null;
+    }
+
+    /**
+     * Updates the URL with the current station name
+     * @param {string} stationName - The station name to set in URL
+     */
+    function updateURL(stationName) {
+        if (!stationName) {
+            // Clear URL if no station selected - go back to base path
+            if (window.history.replaceState) {
+                const currentPath = window.location.pathname;
+                const basePath = currentPath.includes('/') 
+                    ? currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'
+                    : '/';
+                window.history.replaceState(null, '', basePath);
+            }
+            // Reset page title
+            document.title = 'TMB Metro Master';
+            return;
+        }
+        
+        const slug = stationNameToSlug(stationName);
+        const currentPath = window.location.pathname;
+        // Get base path (everything before the last segment)
+        const basePath = currentPath.includes('/') && currentPath !== '/'
+            ? currentPath.substring(0, currentPath.lastIndexOf('/'))
+            : '';
+        const newURL = `${basePath}/${slug}`;
+        
+        // Update URL without page reload
+        if (window.history.pushState) {
+            window.history.pushState({ station: stationName }, '', newURL);
+            // Update page title
+            document.title = `${stationName} - TMB Metro Master`;
+        }
+    }
+
+    /**
+     * Reads the station from URL and selects it
+     */
+    function loadStationFromURL() {
+        const path = window.location.pathname;
+        // Extract the last segment of the path (the station slug)
+        const pathParts = path.split('/').filter(p => p && p !== 'index.html');
+        const slug = pathParts[pathParts.length - 1];
+        
+        if (!slug || slug === 'index.html' || slug === '') {
+            return; // No station in URL
+        }
+        
+        // Wait for stations to be loaded
+        if (!choicesInstance) {
+            // If stations aren't loaded yet, wait a bit and try again
+            setTimeout(loadStationFromURL, 100);
+            return;
+        }
+        
+        // Get all available stations from Choices.js
+        // Choices.js stores choices in the instance
+        const stations = choicesInstance.choices || [];
+        
+        if (stations.length === 0) {
+            console.warn('No stations available yet, retrying...');
+            setTimeout(loadStationFromURL, 200);
+            return;
+        }
+        
+        // Find station by slug
+        const stationName = slugToStationName(slug, stations.map(s => ({ name: s.value || s.label })));
+        
+        if (stationName) {
+            console.log(`Loading station from URL: ${stationName}`);
+            // Set the value in Choices.js - use setValue with the station name
+            try {
+                choicesInstance.setValue([stationName]);
+                // Small delay to ensure Choices.js updates, then fetch data
+                setTimeout(() => {
+                    fetchStationData();
+                }, 50);
+            } catch (error) {
+                console.error('Error setting station from URL:', error);
+                // Try alternative method
+                const choice = stations.find(s => (s.value || s.label) === stationName);
+                if (choice) {
+                    choicesInstance.setValueByChoice(choice.value || choice.label);
+                    setTimeout(() => {
+                        fetchStationData();
+                    }, 50);
+                }
+            }
+        } else {
+            console.warn(`Station not found for slug: ${slug}`);
+            // Clear invalid URL
+            updateURL(null);
+        }
+    }
 
     /**
      * A robust CSV parser that handles quoted fields containing commas.
@@ -54,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Assumes CSV format: FID,ID_ESTACIO,CODI_GRUP_ESTACIO,NOM_ESTACIO,...
      */
     async function loadStations() {
-        console.log("Attempting to load stations from CSV...");
+        debugLog("Attempting to load stations from CSV...");
         try {
             const response = await fetch(STATIONS_CSV_PATH);
             if (!response.ok) {
@@ -62,62 +204,66 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const csvText = await response.text();
 
-            // Use a map to group lines by station name, ensuring each station appears only once.
+            // Use a map to group lines by station name, ensuring each station appears only once
             const stationsMap = new Map();
-            csvText.split('\n').slice(1).forEach(line => {
-                if (!line) return; // Skip empty lines
+            const lines = csvText.split('\n');
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
 
                 const columns = parseCsvLine(line);
                 const stationName = safeTrim(columns[7]); // NOM_ESTACIO
                 const lineSpecificCode = safeTrim(columns[6]); // CODI_ESTACIO
                 const lineName = safeTrim(columns[11]); // NOM_LINIA
 
-                if (!stationName || !lineSpecificCode || !lineName) return;
+                if (!stationName || !lineSpecificCode || !lineName) continue;
 
                 if (stationsMap.has(stationName)) {
-                    // If station already exists, just add the new line to its list
                     const stationData = stationsMap.get(stationName);
                     stationData.lines.add(lineName);
-                    stationData.apiCodes.add(lineSpecificCode); // Add the line-specific code to the set
+                    stationData.apiCodes.add(lineSpecificCode);
                 } else {
-                    // If it's a new station, create its entry
                     stationsMap.set(stationName, {
                         name: stationName,
-                        apiCodes: new Set([lineSpecificCode]), // Use a Set for unique API codes
-                        lines: new Set([lineName]) // Use a Set for unique lines
+                        apiCodes: new Set([lineSpecificCode]),
+                        lines: new Set([lineName])
                     });
                 }
-            });
+            }
 
-            // --- DEBUG LOG ---
-            // Log the final grouped station data to the console for verification.
-            console.log("--- Station Grouping Report ---");
+            debugLog("--- Station Grouping Report ---");
             stationsMap.forEach((stationData, stationName) => {
-                console.log(`Station: "${stationName}" | API Codes: [${Array.from(stationData.apiCodes).join(', ')}] | Lines: [${Array.from(stationData.lines).join(', ')}]`);
+                debugLog(`Station: "${stationName}" | API Codes: [${Array.from(stationData.apiCodes).join(', ')}] | Lines: [${Array.from(stationData.lines).join(', ')}]`);
             });
-            console.log("---------------------------------");
+            debugLog("---------------------------------");
 
             const stations = Array.from(stationsMap.values())
-                .map(station => ({ ...station, apiCodes: Array.from(station.apiCodes), lines: Array.from(station.lines).sort() })) // Convert Sets to Arrays
+                .map(station => ({ 
+                    ...station, 
+                    apiCodes: Array.from(station.apiCodes), 
+                    lines: Array.from(station.lines).sort() 
+                }))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            // Create the list of choices for the library before initializing
             const choices = stations.map(station => ({
-                value: station.name, // Use the station name as the unique value
-                label: station.name, // The text displayed in the dropdown
-                customProperties: { apiCodes: station.apiCodes, lines: station.lines } // Store all API codes and lines
+                value: station.name,
+                label: station.name,
+                customProperties: { apiCodes: station.apiCodes, lines: station.lines }
             }));
 
-            // Initialize Choices.js with the choices data
             choicesInstance = new Choices(stationSelect, {
-                choices: choices, // Pass the choices here
+                choices: choices,
                 searchEnabled: true,
                 itemSelectText: '',
-                shouldSort: false, // We have already sorted the list
+                shouldSort: false,
                 placeholder: true,
                 placeholderValue: '-- Choose a station --',
             });
-            console.log("Stations loaded and Choices.js initialized successfully.");
+            debugLog("Stations loaded and Choices.js initialized successfully.");
+            
+            // Try to load station from URL after stations are loaded
+            loadStationFromURL();
         } catch (error) {
             console.error("ERROR in loadStations:", error);
             showError("Could not load stations. Please refresh the page to try again.");
@@ -128,22 +274,28 @@ document.addEventListener('DOMContentLoaded', () => {
      * Fetches and displays data for a station from the API.
      */
     async function fetchStationData() {
-        // Guard clause: If choicesInstance is null, it means station loading failed.
         if (!choicesInstance) {
             console.error("Cannot fetch data: Choices.js instance is not available.");
             return;
         }
 
-        const selectedItem = choicesInstance.getValue(); // This gets the full item object
-        // Note: choicesInstance.getValue(true) would just return the station code string
-        const stationApiCodes = selectedItem?.customProperties?.apiCodes; // This is correct
+        const selectedItem = choicesInstance.getValue();
+        const stationApiCodes = selectedItem?.customProperties?.apiCodes;
         if (!stationApiCodes || stationApiCodes.length === 0) {
             showError("Please select a station.");
+            updateURL(null); // Clear URL if no valid selection
             return;
         }
+        
+        // Update URL with selected station name
+        const stationName = selectedItem.value || selectedItem.label;
+        updateURL(stationName);
 
         // Stop any previous auto-refresh and countdown timers
-        if (autoRefreshIntervalId) clearInterval(autoRefreshIntervalId);
+        if (autoRefreshIntervalId) {
+            clearInterval(autoRefreshIntervalId);
+            autoRefreshIntervalId = null;
+        }
         clearCountdownTimers();
         
         // Abort any ongoing fetch request before starting a new one
@@ -151,44 +303,87 @@ document.addEventListener('DOMContentLoaded', () => {
         abortController = new AbortController();
 
         // Clear previous results and show loading state
-        errorMessageDiv.textContent = '';
-        resultsContainer.innerHTML = '<p>Loading train data...</p>'; // Add a loading indicator
+        showError(''); // Hide error div
+        resultsContainer.innerHTML = '<p class="loading">Loading train data...</p>';
 
         try {
-            // --- DEBUG LOG ---
-            console.log(`[API] Station "${selectedItem.value}" has these API codes: [${stationApiCodes.join(', ')}]. Fetching data for all.`);
+            console.log(`\n🚇 [PRIMARY API] Station "${selectedItem.value}" has these API codes: [${stationApiCodes.join(', ')}]`);
+            console.log(`📡 [PRIMARY API] Making ${stationApiCodes.length} request(s) to: ${API_BASE_URL}`);
 
             // Create an array of fetch promises, one for each group code
-            const fetchPromises = stationApiCodes.map(code => {
+            const fetchPromises = stationApiCodes.map((code, index) => {
                 const apiUrl = `${API_BASE_URL}?estacions=${code}&app_id=${PRIMARY_APP_ID}&app_key=${PRIMARY_APP_KEY}`;
-                console.log(`[API] Fetching from: ${apiUrl}`);
-                return fetch(apiUrl, { signal: abortController.signal }).then(res => {
-                    if (!res.ok) throw new Error(`API Error for station ID ${code}: ${res.statusText}`);
-                    return res.json();
-                });
+                console.log(`\n📤 [PRIMARY API] Request ${index + 1}/${stationApiCodes.length}:`);
+                console.log(`   URL: ${apiUrl}`);
+                console.log(`   Station Code: ${code}`);
+                
+                return fetch(apiUrl, { signal: abortController.signal })
+                    .then(async res => {
+                        console.log(`\n📥 [PRIMARY API] Response ${index + 1}/${stationApiCodes.length} for station code ${code}:`);
+                        console.log(`   Status: ${res.status} ${res.statusText}`);
+                        console.log(`   Headers:`, Object.fromEntries(res.headers.entries()));
+                        
+                        if (!res.ok) {
+                            throw new Error(`API Error for station ID ${code}: ${res.statusText}`);
+                        }
+                        
+                        const data = await res.json();
+                        console.log(`   ✅ Response Data:`, data);
+                        console.log(`   📊 Data Structure:`, {
+                            hasLinies: !!data.linies,
+                            liniesCount: data.linies?.length || 0,
+                            linies: data.linies?.map(l => ({
+                                nom: l.nom,
+                                estacionsCount: l.estacions?.length || 0
+                            })) || []
+                        });
+                        
+                        return data;
+                    })
+                    .catch(error => {
+                        // Return null for failed requests so we can handle partial failures
+                        if (error.name === 'AbortError') throw error;
+                        console.error(`\n❌ [PRIMARY API] Failed request ${index + 1}/${stationApiCodes.length} for station code ${code}:`, error);
+                        return null;
+                    });
             });
 
-            // Wait for all API calls to complete
-            const allResponses = await Promise.all(fetchPromises);
+            // Use allSettled to handle partial failures gracefully
+            const results = await Promise.allSettled(fetchPromises);
+            const successfulResponses = results
+                .filter(result => result.status === 'fulfilled' && result.value !== null)
+                .map(result => result.value);
 
-            // Merge the 'linies' arrays from all responses into one single data object
-            const mergedData = allResponses.reduce((acc, current) => {
-                if (current.linies) {
+            console.log(`\n📈 [PRIMARY API] Summary:`);
+            console.log(`   Total requests: ${stationApiCodes.length}`);
+            console.log(`   Successful: ${successfulResponses.length}`);
+            console.log(`   Failed: ${stationApiCodes.length - successfulResponses.length}`);
+
+            if (successfulResponses.length === 0) {
+                throw new Error('All API requests failed');
+            }
+
+            // Merge the 'linies' arrays from all successful responses
+            const mergedData = successfulResponses.reduce((acc, current) => {
+                if (current?.linies) {
                     acc.linies = (acc.linies || []).concat(current.linies);
                 }
                 return acc;
             }, {});
 
-            resultsContainer.innerHTML = ''; // Clear results only on successful fetch
-            displayResults(mergedData, selectedItem.customProperties.lines, stationApiCodes);
-            updateTimestamp();
+            console.log(`\n🔗 [PRIMARY API] Merged Data:`, mergedData);
+            console.log(`   Total linies after merge: ${mergedData.linies?.length || 0}`);
 
-            // Start auto-refreshing every 30 seconds
-            autoRefreshIntervalId = setInterval(fetchStationData, 30000);
+            resultsContainer.innerHTML = '';
+            await displayResults(mergedData, selectedItem.customProperties.lines, stationApiCodes);
+            updateTimestamp(selectedItem.customProperties.lines, mergedData);
+
+            // Start auto-refreshing
+            autoRefreshIntervalId = setInterval(fetchStationData, AUTO_REFRESH_INTERVAL);
         } catch (error) {
             if (error.name === 'AbortError') {
-                console.log('Fetch aborted by new request.');
-                return; // Don't show an error if the fetch was intentionally aborted
+                debugLog('Fetch aborted by new request.');
+                return;
             }
             console.error("ERROR in fetchStationData:", error);
             showError("Could not get information. Please try again later.");
@@ -201,80 +396,132 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string[]} allStationLines - An array of all lines for the station, e.g., ['L1', 'L4'].
      * @param {string[]} stationApiCodes - An array of API codes used for the station.
      */
-    function displayResults(apiData, allStationLines, stationApiCodes) {
+    async function displayResults(apiData, allStationLines, stationApiCodes) {
+        console.log(`\n🎨 [DISPLAY] Processing results for display:`);
+        console.log(`   Station Lines:`, allStationLines);
+        console.log(`   API Codes:`, stationApiCodes);
+        console.log(`   API Data:`, apiData);
+        
         // Clear any existing countdowns before rendering new ones
         clearCountdownTimers();
+        fallbackDataCache.clear(); // Clear fallback cache for new request
 
         // Always clear the main results container before adding new content.
         resultsContainer.innerHTML = '';
 
         // Create a map to store the HTML elements for each line's data from the API response.
+        // Structure: Map<lineName, Map<destination, {element, stationCode, color}>>
         const apiLineDataMap = new Map();
+        const stationsNeedingFallback = new Set(); // Track which station codes need fallback
+        
         if (apiData.linies) {
-            apiData.linies.forEach(line => {
-                line.estacions.forEach(stationPlatform => {
-                    stationPlatform.linies_trajectes.forEach(route => {
-                        const lineName = route.nom_linia; // e.g., "L1"
-                        if (!apiLineDataMap.has(lineName)) {
-                            apiLineDataMap.set(lineName, []);
-                        }
-                        
-                        const lineInfoDiv = document.createElement('div');
-                        lineInfoDiv.className = 'line-info';
-
-                        const header = document.createElement('div');
-                        header.className = 'line-header';
-                        header.style.backgroundColor = `#${route.color_linia}`;
-                        header.innerHTML = `
-                            <span>Line ${route.nom_linia}</span>
-                            <span>Destination: ${route.desti_trajecte}</span>
-                        `;
-                        lineInfoDiv.appendChild(header);
-
-                        const trainList = document.createElement('div');
-                        trainList.className = 'train-list';
-                        // Associate the station code with the list for the fallback API
-                        const stationCodeForThisRoute = stationPlatform.codi_estacio;
-                        trainList.setAttribute('data-station-code', stationCodeForThisRoute);
-
-                        // If linies_trajectes is empty, we have no route info from the primary API.
-                        if (!stationPlatform.linies_trajectes || stationPlatform.linies_trajectes.length === 0) {
-                            console.log(`[Primary API] ❌ No 'linies_trajectes' data for station code ${stationCodeForThisRoute}. Triggering fallback.`);
-                            trainList.innerHTML = '<p>No real-time data. Checking schedule...</p>';
-                            fetchFallbackSchedule(trainList, stationCodeForThisRoute);
-                            lineInfoDiv.appendChild(trainList);
-                            // Since we don't have a route, we can't create a unique header. We'll use what we have.
-                            // This part of the logic might need refinement if we knew what to display in the header.
-                            // For now, we add the train list to the first generated header.
-                            if (!apiLineDataMap.has(lineName)) {
-                                apiLineDataMap.set(lineName, []);
-                            }
-                            apiLineDataMap.get(lineName).push(lineInfoDiv);
-                        } else {
-                            stationPlatform.linies_trajectes.forEach(route => {
-                                if (route.propers_trens && route.propers_trens.length > 0) {
-                                    console.log(`[Primary API] ✅ Found real-time data for ${route.nom_linia} to ${route.desti_trajecte}.`);
-                                    route.propers_trens.forEach(train => {
-                                        const trainDiv = document.createElement('div');
-                                        trainDiv.className = 'train';
-                                        trainDiv.innerHTML = `
-                                            <span class="train-destination">Next train (Live)</span>
-                                            <span class="train-arrival" data-arrival-time="${train.temps_arribada}">Calculating...</span>
-                                        `;
-                                        trainList.appendChild(trainDiv);
-                                    });
-                                } else {
-                                    console.log(`[Primary API] ❌ No 'propers_trens' data for ${route.nom_linia} to ${route.desti_trajecte}. Triggering fallback.`);
-                                    trainList.innerHTML = '<p>No real-time data. Checking schedule...</p>';
-                                    fetchFallbackSchedule(trainList, stationCodeForThisRoute);
-                                }
-                            });
-                            lineInfoDiv.appendChild(trainList);
-                            apiLineDataMap.get(lineName).push(lineInfoDiv);
-                        }
+            console.log(`\n📊 [DISPLAY] Processing ${apiData.linies.length} line(s) from API data`);
+            apiData.linies.forEach((line, lineIndex) => {
+                console.log(`\n   Line ${lineIndex + 1}:`, {
+                    nom: line.nom_linia || line.nom,
+                    estacionsCount: line.estacions?.length || 0
+                });
+                
+                line.estacions.forEach((stationPlatform, stationIndex) => {
+                    console.log(`     Station Platform ${stationIndex + 1}:`, {
+                        codi_estacio: stationPlatform.codi_estacio,
+                        linies_trajectesCount: stationPlatform.linies_trajectes?.length || 0
                     });
+                    
+                    const stationCode = stationPlatform.codi_estacio;
+                    const lineName = line.nom_linia || line.nom;
+                    const lineColor = line.color_linia || '808080';
+                    
+                    // Check if we need fallback for this station
+                    const needsFallback = !stationPlatform.linies_trajectes || 
+                                         stationPlatform.linies_trajectes.length === 0 ||
+                                         stationPlatform.linies_trajectes.every(route => 
+                                             !route.propers_trens || route.propers_trens.length === 0
+                                         );
+                    
+                    if (needsFallback) {
+                        console.log(`       ⚠️  Station code ${stationCode} needs fallback data`);
+                        stationsNeedingFallback.add(stationCode);
+                    } else {
+                        // Process real-time data
+                        stationPlatform.linies_trajectes.forEach((route, routeIndex) => {
+                            console.log(`       Route ${routeIndex + 1}:`, {
+                                nom_linia: route.nom_linia,
+                                desti_trajecte: route.desti_trajecte,
+                                color_linia: route.color_linia,
+                                propers_trensCount: route.propers_trens?.length || 0
+                            });
+                            
+                            if (!apiLineDataMap.has(lineName)) {
+                                apiLineDataMap.set(lineName, new Map());
+                            }
+                            
+                            const destinationMap = apiLineDataMap.get(lineName);
+                            const destination = route.desti_trajecte;
+                            
+                            if (!destinationMap.has(destination)) {
+                                const lineInfoDiv = document.createElement('div');
+                                lineInfoDiv.className = 'line-info';
+
+                                const header = document.createElement('div');
+                                header.className = 'line-header';
+                                header.style.backgroundColor = `#${route.color_linia || lineColor}`;
+                                header.innerHTML = `
+                                    <span>${route.nom_linia || lineName}</span>
+                                    <span>Destination: ${route.desti_trajecte}</span>
+                                `;
+                                lineInfoDiv.appendChild(header);
+
+                                const trainList = document.createElement('div');
+                                trainList.className = 'train-list';
+                                
+                                lineInfoDiv.appendChild(trainList);
+                                destinationMap.set(destination, {
+                                    element: lineInfoDiv,
+                                    stationCode: stationCode,
+                                    color: route.color_linia || lineColor
+                                });
+                            }
+                            
+                            const trainList = destinationMap.get(destination).element.querySelector('.train-list');
+                            
+                            if (route.propers_trens && route.propers_trens.length > 0) {
+                                console.log(`       ✅ Found ${route.propers_trens.length} real-time train(s) for ${route.nom_linia} to ${route.desti_trajecte}`);
+                                route.propers_trens.forEach((train, trainIndex) => {
+                                    console.log(`         Train ${trainIndex + 1}:`, {
+                                        temps_arribada: train.temps_arribada,
+                                        temps_arribada_formatted: new Date(train.temps_arribada).toLocaleString()
+                                    });
+                                    const trainDiv = document.createElement('div');
+                                    trainDiv.className = 'train';
+                                    trainDiv.innerHTML = `
+                                        <span class="train-destination">Next train</span>
+                                        <span class="train-arrival" data-arrival-time="${train.temps_arribada}">Calculating...</span>
+                                    `;
+                                    trainList.appendChild(trainDiv);
+                                });
+                            }
+                        });
+                    }
                 });
             });
+            
+            console.log(`\n📋 [DISPLAY] API Line Data Map created:`, Array.from(apiLineDataMap.entries()).map(([line, dests]) => ({
+                line: line,
+                destinations: Array.from(dests.keys())
+            })));
+        }
+        
+        // Fetch fallback data for stations that need it
+        if (stationsNeedingFallback.size > 0) {
+            console.log(`\n🔄 [DISPLAY] Fetching fallback data for ${stationsNeedingFallback.size} station(s)...`);
+            const fallbackPromises = Array.from(stationsNeedingFallback).map(stationCode => 
+                fetchFallbackScheduleData(stationCode)
+            );
+            await Promise.all(fallbackPromises);
+            
+            // Process fallback data and add to display
+            await processFallbackData(apiLineDataMap, allStationLines, apiData);
         }
 
 
@@ -290,92 +537,360 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // The `allStationLines` is now a clean array like ['L1', 'L4'], so we can iterate directly.
         allStationLines.forEach(lineName => {
-            const lineDataElements = apiLineDataMap.get(lineName);
+            const lineDataMap = apiLineDataMap.get(lineName);
 
-            if (lineDataElements) {
-                lineDataElements.forEach(el => resultsContainer.appendChild(el));
+            if (lineDataMap && lineDataMap.size > 0) {
+                // Sort destinations for consistent display order
+                const sortedDestinations = Array.from(lineDataMap.entries()).sort((a, b) => 
+                    a[0].localeCompare(b[0])
+                );
+                sortedDestinations.forEach(([destination, data]) => {
+                    resultsContainer.appendChild(data.element);
+                });
             } else {
-                // If no data from API for this line, show a placeholder box.
-                resultsContainer.innerHTML += `
-                    <div class="line-info">
-                        <div class="line-header" style="background-color: #808080;">
-                            <span>Line ${lineName}</span>
-                        </div>
-                        <div class="train-list">
-                            <p>No real-time data available for this line.</p>
-                        </div>
+                // If no data from API for this line, show a placeholder box
+                const placeholderDiv = document.createElement('div');
+                placeholderDiv.className = 'line-info';
+                placeholderDiv.innerHTML = `
+                    <div class="line-header" style="background-color: #808080;">
+                        <span>${lineName}</span>
+                    </div>
+                    <div class="train-list">
+                        <p>No real-time data available for this line.</p>
                     </div>
                 `;
+                resultsContainer.appendChild(placeholderDiv);
             }
         });
 
         // If after all checks, the container is still empty, it means no lines were found or matched.
         if (resultsContainer.innerHTML === '' && allStationLines) {
+            console.log(`\n⚠️  [DISPLAY] No data to display for any lines`);
             resultsContainer.innerHTML = '<p>Could not retrieve data for the lines at this station.</p>';
         }
 
+        console.log(`\n✅ [DISPLAY] Display complete. Total line elements created: ${resultsContainer.children.length}`);
+        
         // Find all the newly created arrival elements and start their countdowns.
         startCountdownTimers();
     }
     
     /**
+     * Fetches fallback schedule data and caches it.
+     * @param {string} stationCode - The station code for the API call.
+     * @returns {Promise<Object|null>} The fallback API response data or null if failed.
+     */
+    async function fetchFallbackScheduleData(stationCode) {
+        // Check cache first
+        if (fallbackDataCache.has(stationCode)) {
+            console.log(`\n💾 [FALLBACK API] Using cached data for station code ${stationCode}`);
+            return fallbackDataCache.get(stationCode);
+        }
+        
+        const apiUrl = `${FALLBACK_API_URL}?app_id=${FALLBACK_APP_ID}&app_key=${FALLBACK_APP_KEY}&transit_namespace_element=metro&codi_element=${stationCode}&transit_namespace=metro`;
+        
+        console.log(`\n🔄 [FALLBACK API] Request initiated:`);
+        console.log(`   URL: ${apiUrl}`);
+        console.log(`   Station Code: ${stationCode}`);
+
+        try {
+            console.log(`\n📤 [FALLBACK API] Sending request...`);
+            const response = await fetch(apiUrl);
+            
+            console.log(`\n📥 [FALLBACK API] Response received:`);
+            console.log(`   Status: ${response.status} ${response.statusText}`);
+            console.log(`   Headers:`, Object.fromEntries(response.headers.entries()));
+            
+            if (!response.ok) throw new Error('Fallback API request failed');
+            
+            const data = await response.json();
+            console.log(`   ✅ Response Data:`, data);
+            console.log(`   📊 Data Structure:`, {
+                hasFeatures: !!data.features,
+                featuresCount: data.features?.length || 0,
+                features: data.features?.map(f => ({
+                    line: f.properties?.NOM_LINIA,
+                    destination: f.properties?.DESTI_TRAJECTE,
+                    origin: f.properties?.ORIGEN_TRAJECTE,
+                    hasHoresPas: !!f.properties?.HORES_PAS
+                })) || []
+            });
+
+            // Cache the data
+            fallbackDataCache.set(stationCode, data);
+            return data;
+        } catch (error) {
+            console.error(`\n❌ [FALLBACK API] Error occurred:`, error);
+            console.error(`   Error details:`, {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            fallbackDataCache.set(stationCode, null);
+            return null;
+        }
+    }
+
+    /**
+     * Processes fallback data and adds it to the display map.
+     * @param {Map} apiLineDataMap - The map containing line data.
+     * @param {string[]} allStationLines - All lines for the station.
+     * @param {Object} primaryApiData - The primary API data to get line colors from.
+     */
+    async function processFallbackData(apiLineDataMap, allStationLines, primaryApiData) {
+        console.log(`\n🔧 [FALLBACK] Processing fallback data...`);
+        
+        // Create a color map from primary API data
+        const lineColorMap = new Map();
+        if (primaryApiData?.linies) {
+            primaryApiData.linies.forEach(line => {
+                const lineName = line.nom_linia || line.nom;
+                if (lineName && line.color_linia) {
+                    lineColorMap.set(lineName, line.color_linia);
+                }
+            });
+        }
+        
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Process each cached fallback response
+        for (const [stationCode, data] of fallbackDataCache.entries()) {
+            if (!data || !data.features) continue;
+            
+            console.log(`\n   Processing station code ${stationCode}...`);
+            
+            // Group features by line and destination
+            const groupedByLine = new Map();
+            
+            data.features.forEach((feature, index) => {
+                const props = feature.properties;
+                const lineName = props.NOM_LINIA;
+                const destination = props.DESTI_TRAJECTE;
+                
+                if (!lineName || !destination || !props.HORES_PAS) {
+                    console.log(`     ⚠️  Skipping feature ${index + 1} - missing required data`);
+                    return;
+                }
+                
+                // Get color from primary API or use default
+                const color = lineColorMap.get(lineName) || '808080';
+                
+                console.log(`     Feature ${index + 1}: Line ${lineName}, Destination: ${destination}`);
+                
+                if (!groupedByLine.has(lineName)) {
+                    groupedByLine.set(lineName, new Map());
+                }
+                
+                const lineMap = groupedByLine.get(lineName);
+                if (!lineMap.has(destination)) {
+                    lineMap.set(destination, {
+                        color: color,
+                        stationCode: stationCode,
+                        times: []
+                    });
+                }
+                
+                const timeStrings = props.HORES_PAS.split(',').filter(t => t.trim());
+                const upcomingTimes = timeStrings
+                    .map(timeStr => {
+                        const parts = timeStr.trim().split(':');
+                        if (parts.length < 2) return null;
+                        const hours = parseInt(parts[0], 10);
+                        const minutes = parseInt(parts[1], 10);
+                        const seconds = parts.length > 2 ? parseInt(parts[2], 10) : 0;
+                        
+                        if (isNaN(hours) || isNaN(minutes)) return null;
+                        
+                        const arrivalDate = new Date(today);
+                        arrivalDate.setHours(hours, minutes, seconds, 0);
+                        return arrivalDate;
+                    })
+                    .filter(date => date !== null && date > now)
+                    .sort((a, b) => a - b)
+                    .slice(0, 2);
+                
+                lineMap.get(destination).times.push(...upcomingTimes);
+            });
+            
+            // Add to display map
+            groupedByLine.forEach((lineMap, lineName) => {
+                if (!apiLineDataMap.has(lineName)) {
+                    apiLineDataMap.set(lineName, new Map());
+                }
+                
+                const destinationMap = apiLineDataMap.get(lineName);
+                
+                lineMap.forEach((data, destination) => {
+                    if (data.times.length === 0) return;
+                    
+                    // Sort times and remove duplicates
+                    data.times.sort((a, b) => a - b);
+                    const uniqueTimes = Array.from(new Set(data.times.map(t => t.getTime())))
+                        .map(t => new Date(t))
+                        .sort((a, b) => a - b)
+                        .slice(0, 2);
+                    
+                    // Only create if it doesn't already exist (to avoid duplicates)
+                    if (!destinationMap.has(destination)) {
+                        const lineInfoDiv = document.createElement('div');
+                        lineInfoDiv.className = 'line-info';
+
+                        const header = document.createElement('div');
+                        header.className = 'line-header';
+                        header.style.backgroundColor = `#${data.color}`;
+                        header.innerHTML = `
+                            <span>${lineName}</span>
+                            <span>Destination: ${destination}</span>
+                        `;
+                        lineInfoDiv.appendChild(header);
+
+                        const trainList = document.createElement('div');
+                        trainList.className = 'train-list';
+                        
+                        uniqueTimes.forEach(arrivalTime => {
+                            const trainDiv = document.createElement('div');
+                            trainDiv.className = 'train';
+                            trainDiv.innerHTML = `
+                                <span class="train-destination">Scheduled</span>
+                                <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">Calculating...</span>
+                            `;
+                            trainList.appendChild(trainDiv);
+                        });
+                        
+                        lineInfoDiv.appendChild(trainList);
+                        destinationMap.set(destination, {
+                            element: lineInfoDiv,
+                            stationCode: data.stationCode,
+                            color: data.color
+                        });
+                        
+                        console.log(`     ✅ Created display for Line ${lineName}, Destination: ${destination} with ${uniqueTimes.length} train(s)`);
+                    } else {
+                        console.log(`     ⚠️  Display already exists for Line ${lineName}, Destination: ${destination} - skipping to avoid duplicate`);
+                    }
+                });
+            });
+        }
+    }
+
+    /**
+     * @deprecated - Use fetchFallbackScheduleData and processFallbackData instead
      * Fetches scheduled times from the fallback API when real-time data is unavailable.
      * @param {HTMLElement} trainListElement - The container element to populate with results.
      * @param {string} stationCode - The station code for the API call.
      */
     async function fetchFallbackSchedule(trainListElement, stationCode) {
         const apiUrl = `${FALLBACK_API_URL}?app_id=${FALLBACK_APP_ID}&app_key=${FALLBACK_APP_KEY}&transit_namespace_element=metro&codi_element=${stationCode}&transit_namespace=metro`;
-        console.log(`[FALLBACK API] Fetching from: ${apiUrl}`);
+        
+        console.log(`\n🔄 [FALLBACK API] Request initiated:`);
+        console.log(`   URL: ${apiUrl}`);
+        console.log(`   Station Code: ${stationCode}`);
 
         let foundScheduledTimes = false;
 
         try {
+            console.log(`\n📤 [FALLBACK API] Sending request...`);
             const response = await fetch(apiUrl);
+            
+            console.log(`\n📥 [FALLBACK API] Response received:`);
+            console.log(`   Status: ${response.status} ${response.statusText}`);
+            console.log(`   Headers:`, Object.fromEntries(response.headers.entries()));
+            
             if (!response.ok) throw new Error('Fallback API request failed');
+            
             const data = await response.json();
+            console.log(`   ✅ Response Data:`, data);
+            console.log(`   📊 Data Structure:`, {
+                hasFeatures: !!data.features,
+                featuresCount: data.features?.length || 0,
+                features: data.features?.map(f => ({
+                    type: f.type,
+                    properties: f.properties ? Object.keys(f.properties) : [],
+                    hasHoresPas: !!f.properties?.HORES_PAS,
+                    destination: f.properties?.DESTI_TRAJECTE
+                })) || []
+            });
 
-            trainListElement.innerHTML = ''; // Clear the "Checking..." message
+            trainListElement.innerHTML = '';
             
             if (data.features && data.features.length > 0) {
-                data.features.forEach(feature => {
+                console.log(`\n⏰ [FALLBACK API] Processing ${data.features.length} feature(s)...`);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                data.features.forEach((feature, index) => {
+                    console.log(`\n   Feature ${index + 1}/${data.features.length}:`, feature);
                     const props = feature.properties;
                     const destination = props.DESTI_TRAJECTE;
-                    const timeStrings = props.HORES_PAS.split(',');
-
-                    const now = new Date();
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Get date at midnight
+                    
+                    console.log(`   📍 Destination: ${destination}`);
+                    console.log(`   🕐 HORES_PAS: ${props.HORES_PAS || 'N/A'}`);
+                    
+                    if (!props.HORES_PAS) {
+                        console.log(`   ⚠️  Skipping - no HORES_PAS data`);
+                        return;
+                    }
+                    
+                    const timeStrings = props.HORES_PAS.split(',').filter(t => t.trim());
+                    console.log(`   📋 Parsed time strings:`, timeStrings);
 
                     // Find the next 2 upcoming times from the schedule
-                    const upcomingTimes = timeStrings.map(timeStr => {
-                        const [hours, minutes, seconds] = timeStr.split(':').map(Number);
-                        const arrivalDate = new Date(today);
-                        arrivalDate.setHours(hours, minutes, seconds, 0);
-                        return arrivalDate;
-                    }).filter(arrivalDate => arrivalDate > now) // Filter for future times
-                      .slice(0, 2); // Get just the next two
+                    const upcomingTimes = timeStrings
+                        .map(timeStr => {
+                            const parts = timeStr.trim().split(':');
+                            if (parts.length < 2) return null;
+                            const hours = parseInt(parts[0], 10);
+                            const minutes = parseInt(parts[1], 10);
+                            const seconds = parts.length > 2 ? parseInt(parts[2], 10) : 0;
+                            
+                            if (isNaN(hours) || isNaN(minutes)) return null;
+                            
+                            const arrivalDate = new Date(today);
+                            arrivalDate.setHours(hours, minutes, seconds, 0);
+                            return arrivalDate;
+                        })
+                        .filter(date => date !== null && date > now)
+                        .sort((a, b) => a - b)
+                        .slice(0, 2);
+
+                    console.log(`   ✅ Upcoming times found: ${upcomingTimes.length}`, upcomingTimes.map(t => t.toLocaleTimeString()));
 
                     if (upcomingTimes.length > 0) {
                         foundScheduledTimes = true;
-                        upcomingTimes.forEach(arrivalTime => {
+                        upcomingTimes.forEach((arrivalTime, trainIndex) => {
+                            console.log(`   🚂 Adding train ${trainIndex + 1}: ${arrivalTime.toLocaleTimeString()} to ${destination}`);
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
-                                <span class="train-destination">Scheduled (to ${destination})</span>
+                                <span class="train-destination">Scheduled</span>
                                 <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">Calculating...</span>
                             `;
                             trainListElement.appendChild(trainDiv);
                         });
                     }
                 });
+                
+                console.log(`\n📈 [FALLBACK API] Summary:`);
+                console.log(`   Features processed: ${data.features.length}`);
+                console.log(`   Scheduled times found: ${foundScheduledTimes ? 'Yes' : 'No'}`);
+            } else {
+                console.log(`\n⚠️  [FALLBACK API] No features found in response`);
             }
 
             if (!foundScheduledTimes) {
+                console.log(`\n❌ [FALLBACK API] No scheduled departures found for today`);
                 trainListElement.innerHTML = '<p>No more scheduled departures found for today.</p>';
             }
 
-            startCountdownTimers(); // Re-run to include any newly added timers
+            startCountdownTimers();
         } catch (error) {
-            console.error('[FALLBACK API] Error:', error);
+            console.error(`\n❌ [FALLBACK API] Error occurred:`, error);
+            console.error(`   Error details:`, {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             trainListElement.innerHTML = '<p>Could not retrieve scheduled times.</p>';
         }
     }
@@ -384,30 +899,39 @@ document.addEventListener('DOMContentLoaded', () => {
      * Finds all arrival time elements and starts a countdown timer for each.
      */
     function startCountdownTimers() {
-        const arrivalElements = document.querySelectorAll('.train-arrival');
+        const arrivalElements = document.querySelectorAll('.train-arrival:not([data-timer-active])');
         arrivalElements.forEach(element => {
             const arrivalTimestamp = parseInt(element.getAttribute('data-arrival-time'), 10);
+            if (isNaN(arrivalTimestamp)) {
+                element.textContent = 'Invalid time';
+                return;
+            }
+
+            // Mark element as having an active timer to avoid duplicates
+            element.setAttribute('data-timer-active', 'true');
 
             const updateCountdown = () => {
-                const now = new Date().getTime();
-                const arrivalDate = new Date(arrivalTimestamp);
-                const diffMs = arrivalDate.getTime() - now;
+                const now = Date.now();
+                const diffMs = arrivalTimestamp - now;
 
+                const arrivalDate = new Date(arrivalTimestamp);
                 const arrivalHours = arrivalDate.getHours().toString().padStart(2, '0');
                 const arrivalMinutes = arrivalDate.getMinutes().toString().padStart(2, '0');
                 const absoluteTime = `${arrivalHours}:${arrivalMinutes}`;
 
                 if (diffMs <= 0) {
                     element.textContent = `Arriving now (${absoluteTime})`;
+                    element.classList.add('arriving-now');
                 } else {
                     const minutes = Math.floor(diffMs / 60000);
                     const seconds = Math.floor((diffMs % 60000) / 1000);
-                    element.innerHTML = `${absoluteTime} <span style="font-weight:normal; color:#666;">(in ${minutes}m ${seconds.toString().padStart(2, '0')}s)</span>`;
+                    element.innerHTML = `${absoluteTime} <span class="countdown">(in ${minutes}m ${seconds.toString().padStart(2, '0')}s)</span>`;
+                    element.classList.remove('arriving-now');
                 }
             };
 
-            updateCountdown(); // Update immediately
-            const intervalId = setInterval(updateCountdown, 1000); // Then update every second
+            updateCountdown();
+            const intervalId = setInterval(updateCountdown, 1000);
             countdownIntervalIds.push(intervalId);
         });
     }
@@ -418,6 +942,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearCountdownTimers() {
         countdownIntervalIds.forEach(id => clearInterval(id));
         countdownIntervalIds = [];
+        // Remove timer markers from elements
+        document.querySelectorAll('.train-arrival[data-timer-active]').forEach(el => {
+            el.removeAttribute('data-timer-active');
+        });
     }
 
     /**
@@ -425,27 +953,164 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} message - The error message to display.
      */
     function showError(message) {
-        // Stop any running timers
-        if (autoRefreshIntervalId) clearInterval(autoRefreshIntervalId);
+        if (autoRefreshIntervalId) {
+            clearInterval(autoRefreshIntervalId);
+            autoRefreshIntervalId = null;
+        }
         clearCountdownTimers();
-        timestampContainer.textContent = ''; // Also clear the timestamp on error
-
+        timestampContainer.textContent = '';
         resultsContainer.innerHTML = '';
-        errorMessageDiv.textContent = message;
+        if (message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.setAttribute('role', 'alert');
+            errorMessageDiv.style.display = 'block';
+        } else {
+            errorMessageDiv.textContent = '';
+            errorMessageDiv.removeAttribute('role');
+            errorMessageDiv.style.display = 'none';
+        }
     }
 
     /**
-     * Updates the timestamp display with the current time.
+     * Updates the timestamp display with the current time and line colors for multi-line stations.
+     * @param {string[]} stationLines - Array of line names for the station.
+     * @param {Object} apiData - The API data to extract line colors from.
      */
-    function updateTimestamp() {
+    function updateTimestamp(stationLines = null, apiData = null) {
         const now = new Date();
-        const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
+        const options = { 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: false 
+        };
         const formattedTime = now.toLocaleDateString('en-US', options).replace(',', '');
-        timestampContainer.textContent = `Last updated: ${formattedTime}`;
+        
+        let timestampHTML = `Last updated: ${formattedTime}`;
+        
+        // Add line color indicators for all stations
+        if (stationLines && stationLines.length > 0 && apiData) {
+            const lineColors = new Map();
+            
+            // Extract colors from API data
+            if (apiData.linies) {
+                apiData.linies.forEach(line => {
+                    const lineName = line.nom_linia || line.nom;
+                    if (lineName && line.color_linia) {
+                        lineColors.set(lineName, line.color_linia);
+                    }
+                });
+            }
+            
+            // Build line indicators
+            const lineIndicators = stationLines
+                .sort()
+                .map(lineName => {
+                    const color = lineColors.get(lineName) || '808080';
+                    return `<span class="line-indicator" style="background-color: #${color}">${lineName}</span>`;
+                })
+                .join('');
+            
+            if (lineIndicators) {
+                timestampHTML += `<div class="line-indicators">${lineIndicators}</div>`;
+            }
+        }
+        
+        timestampContainer.innerHTML = timestampHTML;
+        timestampContainer.setAttribute('datetime', now.toISOString());
+    }
+
+    /**
+     * Copies the current page URL to clipboard
+     */
+    function copyLinkToClipboard() {
+        const url = window.location.href;
+        
+        // Use modern Clipboard API if available
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => {
+                showCopyFeedback();
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                fallbackCopyTextToClipboard(url);
+            });
+        } else {
+            // Fallback for older browsers
+            fallbackCopyTextToClipboard(url);
+        }
+    }
+
+    /**
+     * Fallback method to copy text to clipboard
+     */
+    function fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showCopyFeedback();
+            } else {
+                console.error('Fallback copy failed');
+            }
+        } catch (err) {
+            console.error('Fallback copy error:', err);
+        }
+        
+        document.body.removeChild(textArea);
+    }
+
+    /**
+     * Shows visual feedback when link is copied
+     */
+    function showCopyFeedback() {
+        const btn = document.getElementById('copy-link-btn');
+        if (!btn) return;
+        
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.classList.add('copied');
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('copied');
+        }, 2000);
     }
 
     // --- Initialization ---
     loadStations();
     // Add event listener to the Choices.js instance, not the original select element.
     stationSelect.addEventListener('choice', fetchStationData);
+    
+    // Add copy link button event listener
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    if (copyLinkBtn) {
+        copyLinkBtn.addEventListener('click', copyLinkToClipboard);
+    }
+    
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (event) => {
+        if (event.state && event.state.station) {
+            // Station was in state, try to load it
+            if (choicesInstance) {
+                choicesInstance.setValueByChoice(event.state.station);
+                fetchStationData();
+            }
+        } else {
+            // No station in state, clear selection
+            if (choicesInstance) {
+                choicesInstance.clearStore();
+                resultsContainer.innerHTML = '';
+                timestampContainer.textContent = '';
+            }
+        }
+    });
 });

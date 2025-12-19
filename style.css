@@ -1,4 +1,8 @@
-/* Estils generals i per a mòbils (Mobile-First) */
+/* Mobile-First Responsive Design */
+* {
+    box-sizing: border-box;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: #f4f7f6;
@@ -9,6 +13,7 @@ body {
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
+    line-height: 1.6;
 }
 
 .container {
@@ -18,6 +23,13 @@ body {
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+@media (min-width: 768px) {
+    .container {
+        padding: 30px;
+    }
 }
 
 header {
@@ -35,10 +47,13 @@ header h1 {
     align-items: center;
     justify-content: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .logo {
     height: 40px;
+    width: auto;
+    object-fit: contain;
 }
 
 header p {
@@ -63,6 +78,24 @@ header p {
 
 #results-container {
     margin-top: 25px;
+    min-height: 50px;
+}
+
+.loading {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
 }
 
 .line-info {
@@ -104,13 +137,43 @@ header p {
 .train-arrival {
     font-weight: bold;
     color: #d9534f;
+    transition: color 0.3s ease;
+}
+
+.train-arrival .countdown {
+    font-weight: normal;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.train-arrival.arriving-now {
+    color: #5cb85c;
+    animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .error {
-    /* Keep the red color for visibility, but remove the container style */
     color: #d9534f;
     margin-top: 20px;
+    padding: 12px;
     text-align: center;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    font-weight: 500;
+    display: none;
+}
+
+.error:not(:empty) {
+    display: block;
 }
 
 #timestamp-container {
@@ -118,6 +181,31 @@ header p {
     font-size: 0.9em;
     color: #666;
     margin-top: 15px;
+    min-height: 20px;
+}
+
+#timestamp-container:empty {
+    display: none;
+}
+
+.line-indicators {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.line-indicator {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85em;
+    min-width: 32px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 footer {
@@ -127,4 +215,204 @@ footer {
     border-top: 1px solid #eee;
     color: #999;
     font-size: 0.9em;
+}
+
+.version {
+    margin-left: 8px;
+    opacity: 0.7;
+    font-weight: 500;
+}
+
+.copy-link-btn {
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: all 0.2s ease;
+    min-width: 36px;
+    height: 36px;
+}
+
+.copy-link-btn:hover {
+    background-color: #f5f5f5;
+    border-color: #0078c3;
+    color: #0078c3;
+}
+
+.copy-link-btn:active {
+    transform: scale(0.95);
+}
+
+.copy-link-btn.copied {
+    background-color: #5cb85c;
+    border-color: #5cb85c;
+    color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 12px;
+        max-width: 100%;
+    }
+    
+    header {
+        padding-bottom: 12px;
+        margin-bottom: 15px;
+    }
+    
+    header h1 {
+        font-size: 1.4em;
+        gap: 8px;
+    }
+    
+    .logo {
+        height: 30px;
+    }
+    
+    header p {
+        font-size: 0.9em;
+        margin-top: 4px;
+    }
+    
+    .selection-form {
+        gap: 12px;
+    }
+    
+    #station-select {
+        padding: 10px;
+        font-size: 0.95em;
+    }
+    
+    #results-container {
+        margin-top: 20px;
+    }
+    
+    .line-info {
+        margin-bottom: 15px;
+    }
+    
+    .line-header {
+        padding: 8px 12px;
+        font-size: 0.9em;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .line-header span:first-child {
+        font-size: 1em;
+    }
+    
+    .line-header span:last-child {
+        font-size: 0.85em;
+        opacity: 0.95;
+    }
+    
+    .train-list {
+        padding: 12px;
+    }
+    
+    .train {
+        padding: 8px 0;
+        font-size: 0.9em;
+    }
+    
+    .train-destination {
+        font-size: 0.9em;
+    }
+    
+    .train-arrival {
+        font-size: 0.95em;
+    }
+    
+    .train-arrival .countdown {
+        font-size: 0.8em;
+    }
+    
+    #timestamp-container {
+        font-size: 0.85em;
+        margin-top: 12px;
+        text-align: left;
+    }
+    
+    .line-indicators {
+        justify-content: flex-start;
+        margin-top: 6px;
+        gap: 5px;
+    }
+    
+    .line-indicator {
+        padding: 3px 6px;
+        font-size: 0.8em;
+        min-width: 28px;
+    }
+    
+    footer {
+        margin-top: 20px;
+        padding-top: 12px;
+        font-size: 0.85em;
+    }
+    
+    .error {
+        margin-top: 15px;
+        padding: 10px;
+        font-size: 0.9em;
+    }
+    
+    .loading {
+        padding: 15px;
+        font-size: 0.9em;
+        animation: pulse 0.8s ease-in-out infinite;
+    }
+    
+    .copy-link-btn {
+        padding: 6px 8px;
+        min-width: 32px;
+        height: 32px;
+    }
+    
+    .copy-link-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+    
+    /* Faster animations for mobile */
+    .container {
+        transition: box-shadow 0.15s ease;
+    }
+    
+    .train-arrival {
+        transition: color 0.15s ease;
+    }
+    
+    .train-arrival.arriving-now {
+        animation: blink 0.6s ease-in-out infinite;
+    }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus styles for accessibility */
+select:focus,
+button:focus {
+    outline: 2px solid #0078c3;
+    outline-offset: 2px;
 }
