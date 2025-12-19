@@ -427,6 +427,84 @@ footer {
     height: 18px;
 }
 
+/* Dropdown line indicators */
+.choices__item--choice {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+}
+
+.choices-station-name {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.choices-line-indicators {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.dropdown-line-indicator {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.7em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+/* Dropdown list styling - fixed height and scrollable */
+.choices__list--dropdown {
+    max-height: 320px; /* Show ~8 items, rest scrollable */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.choices__list--dropdown .choices__item--choice {
+    padding: 10px 12px;
+}
+
+/* Search box styling */
+.choices__inner {
+    position: relative;
+}
+
+.choices__input--cloned {
+    margin: 0;
+    padding: 8px 10px;
+}
+
+/* Hide line indicators in selected display */
+.choices__list--single .choices__item .choices-line-indicators {
+    display: none;
+}
+
+.choices__list--single .choices__item {
+    display: block;
+}
+
+/* Ensure search is on top and sticky */
+.choices__list--dropdown {
+    position: relative;
+}
+
+.choices__list--dropdown .choices__input {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: white;
+    border-bottom: 1px solid #ddd;
+    margin: 0;
+    padding: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
     body {

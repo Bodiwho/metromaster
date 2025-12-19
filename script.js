@@ -300,11 +300,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            const choices = stations.map(station => ({
-                value: station.name,
-                label: station.name,
-                customProperties: { apiCodes: station.apiCodes, lines: station.lines }
-            }));
+            const choices = stations.map(station => {
+                // Create line indicators HTML
+                const lines = station.lines || [];
+                const lineIndicators = lines.map(lineName => {
+                    const color = lineColorMap.get(lineName) || '808080';
+                    return `<span class="dropdown-line-indicator" style="background-color: #${color}">${lineName}</span>`;
+                }).join('');
+                
+                // Include line indicators on the right side of the station name
+                const labelHTML = lineIndicators 
+                    ? `<span class="choices-station-name">${station.name}</span><span class="choices-line-indicators">${lineIndicators}</span>`
+                    : station.name;
+                
+                return {
+                    value: station.name,
+                    label: labelHTML,
+                    customProperties: { apiCodes: station.apiCodes, lines: station.lines }
+                };
+            });
 
             // Store stations list for URL loading (with full data structure)
             stationsList = stations.map(s => ({
@@ -323,6 +337,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 shouldSort: false,
                 placeholder: true,
                 placeholderValue: '-- Choose a station --',
+                allowHTML: true, // Allow HTML in labels
+                searchChoices: true, // Enable search
+                position: 'auto', // Position dropdown
+                maxItemCount: 8, // Limit visible items, rest scrollable
+                renderSelectedChoices: 'always' // Always show selected
             });
             console.log(`✓ Stations loaded: ${stationsList.length} stations available`);
             
