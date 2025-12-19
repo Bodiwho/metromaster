@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let fallbackDataCache = new Map(); // Cache fallback API responses by station code
     let stationsList = []; // Store stations list for URL loading
     let lineColorMap = new Map(); // Map of line names to their colors (e.g., 'L1' -> 'CE1126')
+    let selectedLineFilter = null; // Currently selected line filter (null = show all)
 
     // --- Utility Functions ---
     /**
@@ -503,6 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             resultsContainer.innerHTML = '';
+            // Clear line filter when fetching new station data
+            selectedLineFilter = null;
             const displaySuccess = await displayResults(mergedData, selectedItem.customProperties.lines, stationApiCodes);
             
             // Only show error if both primary and fallback failed
@@ -668,6 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!destinationMap.has(destination)) {
                                 const lineInfoDiv = document.createElement('div');
                                 lineInfoDiv.className = 'line-info';
+                                lineInfoDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
 
                                 const header = document.createElement('div');
                                 header.className = 'line-header';
@@ -761,6 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If no data from API for this line, show a placeholder box
                 const placeholderDiv = document.createElement('div');
                 placeholderDiv.className = 'line-info';
+                placeholderDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
                 placeholderDiv.innerHTML = `
                     <div class="line-header" style="background-color: #808080;">
                         <span>${lineName}</span>
@@ -924,6 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!destinationMap.has(destination)) {
                         const lineInfoDiv = document.createElement('div');
                         lineInfoDiv.className = 'line-info';
+                        lineInfoDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
 
                         const header = document.createElement('div');
                         header.className = 'line-header';
@@ -1354,12 +1360,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            // Build line indicators
+            // Build line indicators with click handlers
             const lineIndicators = stationLines
                 .sort()
                 .map(lineName => {
                     const color = lineColors.get(lineName) || '808080';
-                    return `<span class="line-indicator" style="background-color: #${color}">${lineName}</span>`;
+                    const isActive = selectedLineFilter === lineName ? 'active' : '';
+                    return `<span class="line-indicator ${isActive}" data-line="${lineName}" style="background-color: #${color}" role="button" tabindex="0" aria-label="Filter by ${lineName}">${lineName}</span>`;
                 })
                 .join('');
             
@@ -1419,6 +1426,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         timestampContainer.innerHTML = timestampHTML;
         
+        // Attach event listeners for line indicator clicks (filter by line)
+        const lineIndicatorElements = timestampContainer.querySelectorAll('.line-indicator');
+        lineIndicatorElements.forEach(indicator => {
+            indicator.addEventListener('click', () => {
+                const lineName = indicator.getAttribute('data-line');
+                filterByLine(lineName);
+            });
+            
+            // Keyboard accessibility
+            indicator.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const lineName = indicator.getAttribute('data-line');
+                    filterByLine(lineName);
+                }
+            });
+        });
+        
         // Add refresh button event listener if it exists
         const refreshBtn = document.getElementById('refresh-btn');
         if (refreshBtn) {
@@ -1468,6 +1493,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         timestampContainer.setAttribute('datetime', now.toISOString());
+    }
+
+    /**
+     * Filters the displayed train results by line
+     * @param {string} lineName - The line name to filter by (null to show all)
+     */
+    function filterByLine(lineName) {
+        // Toggle: if clicking the same line, clear filter
+        if (selectedLineFilter === lineName) {
+            selectedLineFilter = null;
+        } else {
+            selectedLineFilter = lineName;
+        }
+        
+        // Get all line-info elements
+        const allLineInfos = resultsContainer.querySelectorAll('.line-info');
+        
+        // Show/hide based on filter
+        allLineInfos.forEach(lineInfo => {
+            const lineData = lineInfo.getAttribute('data-line');
+            if (selectedLineFilter === null) {
+                // Show all lines
+                lineInfo.style.display = '';
+            } else {
+                // Show only selected line
+                lineInfo.style.display = lineData === selectedLineFilter ? '' : 'none';
+            }
+        });
+        
+        // Update line indicator active states
+        const lineIndicators = timestampContainer.querySelectorAll('.line-indicator');
+        lineIndicators.forEach(indicator => {
+            const indicatorLine = indicator.getAttribute('data-line');
+            if (selectedLineFilter === indicatorLine) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        });
     }
 
     /**
