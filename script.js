@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FALLBACK_APP_KEY = '8504ae3a636b155724a1c7e140ee039f';
     const FALLBACK_API_URL = 'https://api.tmb.cat/v1/transit/core/horaris/';
     const STATIONS_CSV_PATH = 'estacions_linia.csv';
-    const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
+    const AUTO_REFRESH_INTERVAL = 120000; // 2 minutes (increased from 30 seconds)
     const DEBUG_MODE = false; // Set to true for development debugging
 
     // --- DOM Elements ---
@@ -1052,7 +1052,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const formattedTime = now.toLocaleDateString('en-US', options).replace(',', '');
         
-        let timestampHTML = `Last updated: ${formattedTime}`;
+        // Always show refresh button, and line indicators if available
+        let lineIndicatorsHTML = '';
         
         // Add line color indicators for all stations
         if (stationLines && stationLines.length > 0 && apiData) {
@@ -1078,11 +1079,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 .join('');
             
             if (lineIndicators) {
-                timestampHTML += `<div class="line-indicators">${lineIndicators}</div>`;
+                lineIndicatorsHTML = `<div class="line-indicators">${lineIndicators}</div>`;
             }
         }
         
+        // Always include refresh button
+        const timestampHTML = `
+            <div class="timestamp-content">
+                <span>Last updated: ${formattedTime}</span>
+                <div class="line-indicators-wrapper">
+                    ${lineIndicatorsHTML}
+                    <button id="refresh-btn" class="refresh-btn" title="Refresh data" aria-label="Refresh train times">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+        
         timestampContainer.innerHTML = timestampHTML;
+        
+        // Add refresh button event listener if it exists
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) {
+            // Remove any existing listeners by cloning the button
+            const newRefreshBtn = refreshBtn.cloneNode(true);
+            refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
+            
+            newRefreshBtn.addEventListener('click', () => {
+                if (choicesInstance) {
+                    const selectedItem = choicesInstance.getValue();
+                    if (selectedItem && selectedItem.customProperties && selectedItem.customProperties.apiCodes) {
+                        // Get station data
+                        const stationName = selectedItem.value || selectedItem.label;
+                        const stationData = stationsList.find(s => s.name === stationName);
+                        if (stationData) {
+                            const dataToPass = {
+                                value: stationData.value || stationData.name,
+                                label: stationData.label || stationData.name,
+                                customProperties: stationData.customProperties || {}
+                            };
+                            fetchStationData(dataToPass);
+                        } else {
+                            fetchStationData();
+                        }
+                    } else {
+                        fetchStationData();
+                    }
+                }
+            });
+        }
         timestampContainer.setAttribute('datetime', now.toISOString());
     }
 

@@ -188,11 +188,24 @@ header p {
     display: none;
 }
 
+.timestamp-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.line-indicators-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
 .line-indicators {
     display: flex;
     gap: 6px;
     justify-content: flex-end;
-    margin-top: 8px;
     flex-wrap: wrap;
 }
 
@@ -252,6 +265,40 @@ footer {
     background-color: #5cb85c;
     border-color: #5cb85c;
     color: white;
+}
+
+/* Refresh Button */
+.refresh-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #495057;
+    transition: all 0.2s ease;
+    min-width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+.refresh-btn:hover {
+    background-color: #e9ecef;
+    border-color: #0078c3;
+    color: #0078c3;
+    transform: scale(1.05);
+}
+
+.refresh-btn:active {
+    transform: rotate(180deg) scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.refresh-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 /* Responsive adjustments */
@@ -344,9 +391,14 @@ footer {
         text-align: left;
     }
     
-    .line-indicators {
+    .line-indicators-wrapper {
         justify-content: flex-start;
         margin-top: 6px;
+        gap: 8px;
+    }
+    
+    .line-indicators {
+        justify-content: flex-start;
         gap: 5px;
     }
     
@@ -383,6 +435,26 @@ footer {
     .copy-link-btn svg {
         width: 14px;
         height: 14px;
+    }
+    
+    .timestamp-content {
+        gap: 6px;
+    }
+    
+    .line-indicators-wrapper {
+        gap: 8px;
+        margin-top: 4px;
+    }
+    
+    .refresh-btn {
+        padding: 6px 8px;
+        min-width: 32px;
+        height: 32px;
+    }
+    
+    .refresh-btn svg {
+        width: 16px;
+        height: 16px;
     }
     
     /* Faster animations for mobile */
