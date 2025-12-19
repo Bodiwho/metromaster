@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let choicesInstance = null;
     let abortController = null;
     let fallbackDataCache = new Map(); // Cache fallback API responses by station code
+    let stationsList = []; // Store stations list for URL loading
 
     // --- Utility Functions ---
     /**
@@ -69,17 +70,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Updates the URL with the current station name
+     * Uses hash-based routing for GitHub Pages compatibility
      * @param {string} stationName - The station name to set in URL
      */
     function updateURL(stationName) {
         if (!stationName) {
-            // Clear URL if no station selected - go back to base path
+            // Clear URL if no station selected
             if (window.history.replaceState) {
-                const currentPath = window.location.pathname;
-                const basePath = currentPath.includes('/') 
-                    ? currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'
-                    : '/';
-                window.history.replaceState(null, '', basePath);
+                // Remove hash from URL but keep pathname and search
+                const newURL = window.location.pathname + window.location.search;
+                window.history.replaceState(null, '', newURL);
             }
             // Reset page title
             document.title = 'TMB Metro Master';
@@ -87,16 +87,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const slug = stationNameToSlug(stationName);
-        const currentPath = window.location.pathname;
-        // Get base path (everything before the last segment)
-        const basePath = currentPath.includes('/') && currentPath !== '/'
-            ? currentPath.substring(0, currentPath.lastIndexOf('/'))
-            : '';
-        const newURL = `${basePath}/${slug}`;
+        // Use hash-based routing for GitHub Pages compatibility
+        // Preserve pathname and search params, only update hash
+        const newURL = window.location.pathname + window.location.search + '#' + slug;
         
         // Update URL without page reload
-        if (window.history.pushState) {
-            window.history.pushState({ station: stationName }, '', newURL);
+        if (window.history.replaceState) {
+            window.history.replaceState({ station: stationName }, '', newURL);
             // Update page title
             document.title = `${stationName} - TMB Metro Master`;
         }
@@ -104,56 +101,95 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Reads the station from URL and selects it
+     * Supports both hash-based (#station) and path-based (/station) routing
      */
+    let loadStationRetryCount = 0;
+    const MAX_RETRIES = 20; // Maximum number of retries (20 * 200ms = 4 seconds max)
+    
     function loadStationFromURL() {
-        const path = window.location.pathname;
-        // Extract the last segment of the path (the station slug)
-        const pathParts = path.split('/').filter(p => p && p !== 'index.html');
-        const slug = pathParts[pathParts.length - 1];
-        
-        if (!slug || slug === 'index.html' || slug === '') {
-            return; // No station in URL
-        }
-        
-        // Wait for stations to be loaded
-        if (!choicesInstance) {
-            // If stations aren't loaded yet, wait a bit and try again
-            setTimeout(loadStationFromURL, 100);
+        // Prevent infinite loops
+        if (loadStationRetryCount >= MAX_RETRIES) {
+            console.error(`[URL] Max retries (${MAX_RETRIES}) reached. Stations may not be loaded.`);
+            loadStationRetryCount = 0; // Reset for next attempt
             return;
         }
         
-        // Get all available stations from Choices.js
-        // Choices.js stores choices in the instance
-        const stations = choicesInstance.choices || [];
+        let slug = null;
         
-        if (stations.length === 0) {
-            console.warn('No stations available yet, retrying...');
+        // First, try hash-based routing (works with GitHub Pages)
+        const hash = window.location.hash.replace('#', '');
+        if (hash) {
+            slug = hash;
+        } else {
+            // Fallback to path-based routing (for when 404.html works)
+            let path = window.location.pathname;
+            
+            // Handle GitHub Pages 404 redirect (path might be /index.html/station-name)
+            if (path.includes('/index.html/')) {
+                path = path.replace('/index.html', '');
+            }
+            
+            // Extract the last segment of the path (the station slug)
+            const pathParts = path.split('/').filter(p => p && p !== 'index.html' && p !== '');
+            slug = pathParts[pathParts.length - 1];
+        }
+        
+        if (!slug || slug === 'index.html' || slug === '') {
+            loadStationRetryCount = 0; // Reset counter
+            return; // No station in URL
+        }
+        
+        // Wait for stations to be loaded - use stored stationsList instead of Choices.js internal
+        if (!choicesInstance || stationsList.length === 0) {
+            loadStationRetryCount++;
+            if (loadStationRetryCount % 5 === 0) { // Log every 5th retry to reduce spam
+                console.log(`[URL] Waiting for stations... (${loadStationRetryCount}/${MAX_RETRIES})`);
+            }
             setTimeout(loadStationFromURL, 200);
             return;
         }
         
-        // Find station by slug
-        const stationName = slugToStationName(slug, stations.map(s => ({ name: s.value || s.label })));
+        console.log(`[URL] Found ${stationsList.length} stations, searching for slug: "${slug}"`);
+        loadStationRetryCount = 0; // Reset counter on success
+        
+        // Find station by slug using stored stations list
+        const stationName = slugToStationName(slug, stationsList.map(s => ({ name: s.name })));
         
         if (stationName) {
-            console.log(`Loading station from URL: ${stationName}`);
-            // Set the value in Choices.js - use setValue with the station name
-            try {
-                choicesInstance.setValue([stationName]);
-                // Small delay to ensure Choices.js updates, then fetch data
-                setTimeout(() => {
-                    fetchStationData();
-                }, 50);
-            } catch (error) {
-                console.error('Error setting station from URL:', error);
-                // Try alternative method
-                const choice = stations.find(s => (s.value || s.label) === stationName);
-                if (choice) {
-                    choicesInstance.setValueByChoice(choice.value || choice.label);
-                    setTimeout(() => {
-                        fetchStationData();
-                    }, 50);
+            console.log(`✓ Found station: "${stationName}" for slug: "${slug}"`);
+            
+            // Find the choice item from stored list
+            const choiceItem = stationsList.find(s => s.name === stationName);
+            
+            if (choiceItem) {
+                // Set the value in Choices.js for UI consistency
+                try {
+                    choicesInstance.setValue([choiceItem.value || choiceItem.label]);
+                } catch (e) {
+                    console.warn('Could not set Choices.js value:', e);
                 }
+                
+                // Wait for Choices.js to update, then fetch data directly with the station data
+                setTimeout(() => {
+                    // Create the station data object to pass directly
+                    const stationData = {
+                        value: choiceItem.value || choiceItem.name,
+                        label: choiceItem.label || choiceItem.name,
+                        customProperties: choiceItem.customProperties || {
+                            apiCodes: choiceItem.apiCodes || [],
+                            lines: choiceItem.lines || []
+                        }
+                    };
+                    
+                    console.log(`[URL] Loading station data for: ${stationName}`);
+                    console.log(`[URL] Station has ${stationData.customProperties.apiCodes.length} API code(s)`);
+                    
+                    // Call fetchStationData directly with the station data
+                    // This bypasses Choices.js getValue() issues
+                    fetchStationData(stationData);
+                }, 300);
+            } else {
+                console.warn(`Could not find choice item for station: ${stationName}`);
             }
         } else {
             console.warn(`Station not found for slug: ${slug}`);
@@ -252,6 +288,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 customProperties: { apiCodes: station.apiCodes, lines: station.lines }
             }));
 
+            // Store stations list for URL loading (with full data structure)
+            stationsList = stations.map(s => ({
+                name: s.name,
+                value: s.name,
+                label: s.name,
+                apiCodes: s.apiCodes, // Store directly for easier access
+                lines: s.lines, // Store directly for easier access
+                customProperties: { apiCodes: s.apiCodes, lines: s.lines }
+            }));
+
             choicesInstance = new Choices(stationSelect, {
                 choices: choices,
                 searchEnabled: true,
@@ -260,10 +306,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 placeholder: true,
                 placeholderValue: '-- Choose a station --',
             });
-            debugLog("Stations loaded and Choices.js initialized successfully.");
+            console.log(`✓ Stations loaded: ${stationsList.length} stations available`);
             
             // Try to load station from URL after stations are loaded
-            loadStationFromURL();
+            // Use a small delay to ensure Choices.js is fully ready
+            setTimeout(() => {
+                loadStationFromURL();
+            }, 150);
         } catch (error) {
             console.error("ERROR in loadStations:", error);
             showError("Could not load stations. Please refresh the page to try again.");
@@ -272,24 +321,86 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Fetches and displays data for a station from the API.
+     * @param {Object} overrideStationData - Optional station data to use instead of reading from Choices.js
      */
-    async function fetchStationData() {
+    async function fetchStationData(overrideStationData = null) {
         if (!choicesInstance) {
             console.error("Cannot fetch data: Choices.js instance is not available.");
             return;
         }
 
-        const selectedItem = choicesInstance.getValue();
+        let selectedItem = overrideStationData;
+        
+        // If no override provided, try to get from Choices.js
+        if (!selectedItem) {
+            const getValueResult = choicesInstance.getValue();
+            
+            // Handle different return types from Choices.js
+            if (getValueResult && typeof getValueResult === 'object' && !Array.isArray(getValueResult)) {
+                // If it's an object (but might be a CustomEvent), check if it has the data we need
+                if (getValueResult.detail && getValueResult.detail.customProperties) {
+                    // It's a CustomEvent from the 'choice' event
+                    selectedItem = {
+                        value: getValueResult.detail.value || getValueResult.detail.id,
+                        label: getValueResult.detail.label,
+                        customProperties: getValueResult.detail.customProperties || {}
+                    };
+                    console.log(`[API] Extracted data from CustomEvent for: ${selectedItem.value}`);
+                } else if (getValueResult.customProperties) {
+                    // It's already the station data object
+                    selectedItem = getValueResult;
+                } else {
+                    // Try to get value as string and look it up
+                    const stationName = getValueResult.value || getValueResult.label || getValueResult;
+                    const fullStationData = stationsList.find(s => s.name === stationName);
+                    if (fullStationData) {
+                        selectedItem = {
+                            value: fullStationData.value || fullStationData.name,
+                            label: fullStationData.label || fullStationData.name,
+                            customProperties: fullStationData.customProperties || {}
+                        };
+                        console.log(`[API] Resolved station data for: ${stationName}`);
+                    }
+                }
+            } else if (typeof getValueResult === 'string' || (Array.isArray(getValueResult) && typeof getValueResult[0] === 'string')) {
+                // If getValue() returns just a string, look up the full station data
+                const stationName = Array.isArray(getValueResult) ? getValueResult[0] : getValueResult;
+                const fullStationData = stationsList.find(s => s.name === stationName);
+                if (fullStationData) {
+                    selectedItem = {
+                        value: fullStationData.value || fullStationData.name,
+                        label: fullStationData.label || fullStationData.name,
+                        customProperties: fullStationData.customProperties || {}
+                    };
+                    console.log(`[API] Resolved station data for: ${stationName}`);
+                } else {
+                    console.warn(`[API] Could not find station data for: ${stationName}`);
+                }
+            }
+        }
+        
         const stationApiCodes = selectedItem?.customProperties?.apiCodes;
         if (!stationApiCodes || stationApiCodes.length === 0) {
+            console.error('[API] No API codes found for selected station:', selectedItem);
+            console.error('[API] Selected item structure:', {
+                hasValue: !!selectedItem?.value,
+                hasLabel: !!selectedItem?.label,
+                hasCustomProperties: !!selectedItem?.customProperties,
+                customPropertiesKeys: selectedItem?.customProperties ? Object.keys(selectedItem.customProperties) : [],
+                fullItem: selectedItem
+            });
             showError("Please select a station.");
             updateURL(null); // Clear URL if no valid selection
             return;
         }
         
-        // Update URL with selected station name
+        // Update URL with selected station name (only if hash is different to preserve during auto-refresh)
         const stationName = selectedItem.value || selectedItem.label;
-        updateURL(stationName);
+        const currentHash = window.location.hash.replace('#', '');
+        const expectedSlug = stationNameToSlug(stationName);
+        if (currentHash !== expectedSlug) {
+            updateURL(stationName);
+        }
 
         // Stop any previous auto-refresh and countdown timers
         if (autoRefreshIntervalId) {
@@ -307,43 +418,23 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsContainer.innerHTML = '<p class="loading">Loading train data...</p>';
 
         try {
-            console.log(`\n🚇 [PRIMARY API] Station "${selectedItem.value}" has these API codes: [${stationApiCodes.join(', ')}]`);
-            console.log(`📡 [PRIMARY API] Making ${stationApiCodes.length} request(s) to: ${API_BASE_URL}`);
+            console.log(`[API] Fetching data for "${selectedItem.value}" (${stationApiCodes.length} code(s))`);
 
             // Create an array of fetch promises, one for each group code
             const fetchPromises = stationApiCodes.map((code, index) => {
                 const apiUrl = `${API_BASE_URL}?estacions=${code}&app_id=${PRIMARY_APP_ID}&app_key=${PRIMARY_APP_KEY}`;
-                console.log(`\n📤 [PRIMARY API] Request ${index + 1}/${stationApiCodes.length}:`);
-                console.log(`   URL: ${apiUrl}`);
-                console.log(`   Station Code: ${code}`);
                 
                 return fetch(apiUrl, { signal: abortController.signal })
                     .then(async res => {
-                        console.log(`\n📥 [PRIMARY API] Response ${index + 1}/${stationApiCodes.length} for station code ${code}:`);
-                        console.log(`   Status: ${res.status} ${res.statusText}`);
-                        console.log(`   Headers:`, Object.fromEntries(res.headers.entries()));
-                        
                         if (!res.ok) {
                             throw new Error(`API Error for station ID ${code}: ${res.statusText}`);
                         }
-                        
-                        const data = await res.json();
-                        console.log(`   ✅ Response Data:`, data);
-                        console.log(`   📊 Data Structure:`, {
-                            hasLinies: !!data.linies,
-                            liniesCount: data.linies?.length || 0,
-                            linies: data.linies?.map(l => ({
-                                nom: l.nom,
-                                estacionsCount: l.estacions?.length || 0
-                            })) || []
-                        });
-                        
-                        return data;
+                        return res.json();
                     })
                     .catch(error => {
                         // Return null for failed requests so we can handle partial failures
                         if (error.name === 'AbortError') throw error;
-                        console.error(`\n❌ [PRIMARY API] Failed request ${index + 1}/${stationApiCodes.length} for station code ${code}:`, error);
+                        console.warn(`[API] Request failed for station code ${code}:`, error.message);
                         return null;
                     });
             });
@@ -354,15 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(result => result.status === 'fulfilled' && result.value !== null)
                 .map(result => result.value);
 
-            console.log(`\n📈 [PRIMARY API] Summary:`);
-            console.log(`   Total requests: ${stationApiCodes.length}`);
-            console.log(`   Successful: ${successfulResponses.length}`);
-            console.log(`   Failed: ${stationApiCodes.length - successfulResponses.length}`);
-
-            if (successfulResponses.length === 0) {
-                throw new Error('All API requests failed');
-            }
-
             // Merge the 'linies' arrays from all successful responses
             const mergedData = successfulResponses.reduce((acc, current) => {
                 if (current?.linies) {
@@ -371,15 +453,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 return acc;
             }, {});
 
-            console.log(`\n🔗 [PRIMARY API] Merged Data:`, mergedData);
-            console.log(`   Total linies after merge: ${mergedData.linies?.length || 0}`);
+            // Check if we have any data or if fallback will be used
+            // Don't throw error yet - let displayResults try fallback first
+            const hasPrimaryData = mergedData.linies && mergedData.linies.length > 0;
+            
+            if (!hasPrimaryData && successfulResponses.length === 0) {
+                // All requests failed, but we'll try fallback in displayResults
+                console.log('[API] All primary requests failed, will try fallback API');
+            }
 
             resultsContainer.innerHTML = '';
-            await displayResults(mergedData, selectedItem.customProperties.lines, stationApiCodes);
+            const displaySuccess = await displayResults(mergedData, selectedItem.customProperties.lines, stationApiCodes);
+            
+            // Only show error if both primary and fallback failed
+            if (!displaySuccess && successfulResponses.length === 0) {
+                throw new Error('All API requests failed and no fallback data available');
+            }
+            
             updateTimestamp(selectedItem.customProperties.lines, mergedData);
 
-            // Start auto-refreshing
-            autoRefreshIntervalId = setInterval(fetchStationData, AUTO_REFRESH_INTERVAL);
+            // Start auto-refreshing - preserve current station
+            // Store current station data for auto-refresh
+            const currentStationData = {
+                value: selectedItem.value || selectedItem.label,
+                label: selectedItem.label || selectedItem.value,
+                customProperties: selectedItem.customProperties || {}
+            };
+            
+            autoRefreshIntervalId = setInterval(() => {
+                // Pass the station data directly to preserve it during auto-refresh
+                fetchStationData(currentStationData);
+            }, AUTO_REFRESH_INTERVAL);
         } catch (error) {
             if (error.name === 'AbortError') {
                 debugLog('Fetch aborted by new request.');
@@ -513,12 +617,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Fetch fallback data for stations that need it
+        let hasFallbackData = false;
         if (stationsNeedingFallback.size > 0) {
             console.log(`\n🔄 [DISPLAY] Fetching fallback data for ${stationsNeedingFallback.size} station(s)...`);
             const fallbackPromises = Array.from(stationsNeedingFallback).map(stationCode => 
                 fetchFallbackScheduleData(stationCode)
             );
-            await Promise.all(fallbackPromises);
+            const fallbackResults = await Promise.all(fallbackPromises);
+            
+            // Check if any fallback data was successfully retrieved
+            hasFallbackData = fallbackResults.some(result => result && result.features && result.features.length > 0);
             
             // Process fallback data and add to display
             await processFallbackData(apiLineDataMap, allStationLines, apiData);
@@ -567,12 +675,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (resultsContainer.innerHTML === '' && allStationLines) {
             console.log(`\n⚠️  [DISPLAY] No data to display for any lines`);
             resultsContainer.innerHTML = '<p>Could not retrieve data for the lines at this station.</p>';
+            return false; // Indicate failure
         }
 
+        const hasData = resultsContainer.children.length > 0;
         console.log(`\n✅ [DISPLAY] Display complete. Total line elements created: ${resultsContainer.children.length}`);
         
         // Find all the newly created arrival elements and start their countdowns.
         startCountdownTimers();
+        
+        // Return true if we have data displayed (either primary or fallback), false otherwise
+        return hasData;
     }
     
     /**
@@ -583,49 +696,23 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchFallbackScheduleData(stationCode) {
         // Check cache first
         if (fallbackDataCache.has(stationCode)) {
-            console.log(`\n💾 [FALLBACK API] Using cached data for station code ${stationCode}`);
             return fallbackDataCache.get(stationCode);
         }
         
         const apiUrl = `${FALLBACK_API_URL}?app_id=${FALLBACK_APP_ID}&app_key=${FALLBACK_APP_KEY}&transit_namespace_element=metro&codi_element=${stationCode}&transit_namespace=metro`;
-        
-        console.log(`\n🔄 [FALLBACK API] Request initiated:`);
-        console.log(`   URL: ${apiUrl}`);
-        console.log(`   Station Code: ${stationCode}`);
 
         try {
-            console.log(`\n📤 [FALLBACK API] Sending request...`);
             const response = await fetch(apiUrl);
-            
-            console.log(`\n📥 [FALLBACK API] Response received:`);
-            console.log(`   Status: ${response.status} ${response.statusText}`);
-            console.log(`   Headers:`, Object.fromEntries(response.headers.entries()));
             
             if (!response.ok) throw new Error('Fallback API request failed');
             
             const data = await response.json();
-            console.log(`   ✅ Response Data:`, data);
-            console.log(`   📊 Data Structure:`, {
-                hasFeatures: !!data.features,
-                featuresCount: data.features?.length || 0,
-                features: data.features?.map(f => ({
-                    line: f.properties?.NOM_LINIA,
-                    destination: f.properties?.DESTI_TRAJECTE,
-                    origin: f.properties?.ORIGEN_TRAJECTE,
-                    hasHoresPas: !!f.properties?.HORES_PAS
-                })) || []
-            });
 
             // Cache the data
             fallbackDataCache.set(stationCode, data);
             return data;
         } catch (error) {
-            console.error(`\n❌ [FALLBACK API] Error occurred:`, error);
-            console.error(`   Error details:`, {
-                name: error.name,
-                message: error.message,
-                stack: error.stack
-            });
+            console.warn(`[FALLBACK API] Error for station ${stationCode}:`, error.message);
             fallbackDataCache.set(stationCode, null);
             return null;
         }
@@ -815,25 +902,18 @@ document.addEventListener('DOMContentLoaded', () => {
             trainListElement.innerHTML = '';
             
             if (data.features && data.features.length > 0) {
-                console.log(`\n⏰ [FALLBACK API] Processing ${data.features.length} feature(s)...`);
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-                data.features.forEach((feature, index) => {
-                    console.log(`\n   Feature ${index + 1}/${data.features.length}:`, feature);
+                data.features.forEach((feature) => {
                     const props = feature.properties;
                     const destination = props.DESTI_TRAJECTE;
                     
-                    console.log(`   📍 Destination: ${destination}`);
-                    console.log(`   🕐 HORES_PAS: ${props.HORES_PAS || 'N/A'}`);
-                    
                     if (!props.HORES_PAS) {
-                        console.log(`   ⚠️  Skipping - no HORES_PAS data`);
                         return;
                     }
                     
                     const timeStrings = props.HORES_PAS.split(',').filter(t => t.trim());
-                    console.log(`   📋 Parsed time strings:`, timeStrings);
 
                     // Find the next 2 upcoming times from the schedule
                     const upcomingTimes = timeStrings
@@ -854,12 +934,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         .sort((a, b) => a - b)
                         .slice(0, 2);
 
-                    console.log(`   ✅ Upcoming times found: ${upcomingTimes.length}`, upcomingTimes.map(t => t.toLocaleTimeString()));
-
                     if (upcomingTimes.length > 0) {
                         foundScheduledTimes = true;
-                        upcomingTimes.forEach((arrivalTime, trainIndex) => {
-                            console.log(`   🚂 Adding train ${trainIndex + 1}: ${arrivalTime.toLocaleTimeString()} to ${destination}`);
+                        upcomingTimes.forEach((arrivalTime) => {
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
@@ -870,27 +947,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                 });
-                
-                console.log(`\n📈 [FALLBACK API] Summary:`);
-                console.log(`   Features processed: ${data.features.length}`);
-                console.log(`   Scheduled times found: ${foundScheduledTimes ? 'Yes' : 'No'}`);
-            } else {
-                console.log(`\n⚠️  [FALLBACK API] No features found in response`);
             }
 
             if (!foundScheduledTimes) {
-                console.log(`\n❌ [FALLBACK API] No scheduled departures found for today`);
                 trainListElement.innerHTML = '<p>No more scheduled departures found for today.</p>';
             }
 
             startCountdownTimers();
         } catch (error) {
-            console.error(`\n❌ [FALLBACK API] Error occurred:`, error);
-            console.error(`   Error details:`, {
-                name: error.name,
-                message: error.message,
-                stack: error.stack
-            });
+            console.warn(`[FALLBACK API] Error:`, error.message);
             trainListElement.innerHTML = '<p>Could not retrieve scheduled times.</p>';
         }
     }
@@ -1086,9 +1151,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Initialization ---
+    // Check if there's a hash in the URL on initial load
+    const hasInitialHash = window.location.hash && window.location.hash.length > 1;
+    
     loadStations();
-    // Add event listener to the Choices.js instance, not the original select element.
-    stationSelect.addEventListener('choice', fetchStationData);
+    
+    // If there's a hash on initial load, make sure we try to load it after stations are ready
+    if (hasInitialHash) {
+        // Try loading from URL after a short delay to ensure stations are loaded
+        setTimeout(() => {
+            loadStationFromURL();
+        }, 500);
+    }
+    
+    // Add event listener to the Choices.js instance
+    // The 'choice' event passes a CustomEvent with detail containing the choice data
+    stationSelect.addEventListener('choice', (event) => {
+        console.log('[Event] Choice event received:', event);
+        
+        // Extract the choice data from the CustomEvent
+        let choiceData = null;
+        
+        if (event.detail) {
+            // Choices.js passes choice data in event.detail
+            if (event.detail.customProperties) {
+                choiceData = {
+                    value: event.detail.value || event.detail.label,
+                    label: event.detail.label || event.detail.value,
+                    customProperties: event.detail.customProperties || {}
+                };
+            } else if (event.detail.value || event.detail.label) {
+                // If no customProperties, look it up from stationsList
+                const stationName = event.detail.value || event.detail.label;
+                const fullStationData = stationsList.find(s => s.name === stationName);
+                if (fullStationData) {
+                    choiceData = {
+                        value: fullStationData.value || fullStationData.name,
+                        label: fullStationData.label || fullStationData.name,
+                        customProperties: fullStationData.customProperties || {}
+                    };
+                }
+            }
+        }
+        
+        if (choiceData && choiceData.customProperties && choiceData.customProperties.apiCodes) {
+            console.log(`[Event] Station selected: ${choiceData.value} (${choiceData.customProperties.apiCodes.length} API code(s))`);
+            fetchStationData(choiceData);
+        } else {
+            // Fallback: try to get from Choices.js getValue()
+            console.log('[Event] Could not extract from event, using Choices.js getValue()');
+            setTimeout(() => {
+                fetchStationData();
+            }, 100);
+        }
+    });
     
     // Add copy link button event listener
     const copyLinkBtn = document.getElementById('copy-link-btn');
@@ -1096,7 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         copyLinkBtn.addEventListener('click', copyLinkToClipboard);
     }
     
-    // Handle browser back/forward buttons
+    // Handle browser back/forward buttons and hash changes
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.station) {
             // Station was in state, try to load it
@@ -1105,12 +1221,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchStationData();
             }
         } else {
-            // No station in state, clear selection
-            if (choicesInstance) {
-                choicesInstance.clearStore();
-                resultsContainer.innerHTML = '';
-                timestampContainer.textContent = '';
-            }
+            // Check if there's a hash in the URL
+            loadStationFromURL();
         }
+    });
+    
+    // Also listen for hash changes (when user clicks back/forward or link changes hash)
+    window.addEventListener('hashchange', () => {
+        loadStationFromURL();
     });
 });
