@@ -501,6 +501,16 @@ footer {
     max-height: 320px; /* Show ~8 items, rest scrollable */
     overflow-y: auto;
     overflow-x: hidden;
+    position: relative;
+    margin-top: 4px !important; /* Add spacing between input and dropdown */
+}
+
+/* Force dropdown to always be below (override Choices.js auto positioning) */
+.choices[data-type*="select-one"] .choices__list--dropdown,
+.choices[data-type*="select-multiple"] .choices__list--dropdown {
+    top: 100% !important;
+    bottom: auto !important;
+    margin-top: 4px !important;
 }
 
 .choices__list--dropdown .choices__item--choice {
@@ -526,20 +536,30 @@ footer {
     display: block;
 }
 
-/* Ensure search is on top and sticky */
-.choices__list--dropdown {
-    position: relative;
-}
-
+/* Search input styling - make it clearly visible */
 .choices__list--dropdown .choices__input {
     position: sticky;
     top: 0;
     z-index: 10;
-    background: white;
-    border-bottom: 1px solid #ddd;
-    margin: 0;
-    padding: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background: #f8f9fa;
+    border: 2px solid #0078c3;
+    border-radius: 4px;
+    margin: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 0.95em;
+    outline: none;
+}
+
+.choices__list--dropdown .choices__input:focus {
+    border-color: #005a8f;
+    box-shadow: 0 0 0 3px rgba(0, 120, 195, 0.1);
+}
+
+/* Add a visual indicator that this is the search field */
+.choices__list--dropdown .choices__input::placeholder {
+    color: #6c757d;
+    font-style: italic;
 }
 
 /* Responsive adjustments */
@@ -744,6 +764,13 @@ footer {
     .favorite-line-indicator {
         padding: 2px 5px;
         font-size: 0.7em;
+    }
+    
+    /* Mobile search input styling */
+    .choices__list--dropdown .choices__input {
+        margin: 6px;
+        padding: 8px 10px;
+        font-size: 0.9em;
     }
     
     /* Faster animations for mobile */

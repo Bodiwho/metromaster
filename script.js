@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 placeholderValue: '-- Choose a station --',
                 allowHTML: true, // Allow HTML in labels
                 searchChoices: true, // Enable search
-                position: 'auto', // Position dropdown
+                position: 'bottom', // Always position dropdown below
                 maxItemCount: 8, // Limit visible items, rest scrollable
                 renderSelectedChoices: 'always' // Always show selected
             });
