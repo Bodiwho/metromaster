@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsContainer = document.getElementById('results-container');
     const errorMessageDiv = document.getElementById('error-message');
     const timestampContainer = document.getElementById('timestamp-container');
+    const favoritesSection = document.getElementById('favorites-section');
+    const favoritesContainer = document.getElementById('favorites-container');
 
     // --- State Management ---
     let autoRefreshIntervalId = null;
@@ -23,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let abortController = null;
     let fallbackDataCache = new Map(); // Cache fallback API responses by station code
     let stationsList = []; // Store stations list for URL loading
+    let lineColorMap = new Map(); // Map of line names to their colors (e.g., 'L1' -> 'CE1126')
 
     // --- Utility Functions ---
     /**
@@ -74,11 +77,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} stationName - The station name to set in URL
      */
     function updateURL(stationName) {
+        // Always preserve favorites when updating URL
+        const currentFavorites = getFavoritesFromURL();
+        const favoritesStr = currentFavorites.length > 0 ? `&favorites=${currentFavorites.join(',')}` : '';
+        
         if (!stationName) {
-            // Clear URL if no station selected
+            // Keep favorites in URL even if no station selected
+            const newURL = window.location.pathname + window.location.search + 
+                (favoritesStr ? `#${favoritesStr.replace('&', '')}` : '');
+            
             if (window.history.replaceState) {
-                // Remove hash from URL but keep pathname and search
-                const newURL = window.location.pathname + window.location.search;
                 window.history.replaceState(null, '', newURL);
             }
             // Reset page title
@@ -87,9 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const slug = stationNameToSlug(stationName);
-        // Use hash-based routing for GitHub Pages compatibility
-        // Preserve pathname and search params, only update hash
-        const newURL = window.location.pathname + window.location.search + '#' + slug;
+        // Use hash-based routing: #station-slug&favorites=slug1,slug2
+        // Always preserve favorites when changing stations
+        const newURL = window.location.pathname + window.location.search + '#' + slug + favoritesStr;
         
         // Update URL without page reload
         if (window.history.replaceState) {
@@ -117,9 +125,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let slug = null;
         
         // First, try hash-based routing (works with GitHub Pages)
+        // Format: #station-slug or #station-slug&favorites=slug1,slug2
         const hash = window.location.hash.replace('#', '');
         if (hash) {
-            slug = hash;
+            // Extract station slug (before &favorites=)
+            slug = hash.split('&')[0];
+            // Load favorites from URL
+            loadFavoritesFromURL();
         } else {
             // Fallback to path-based routing (for when 404.html works)
             let path = window.location.pathname;
@@ -252,8 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const stationName = safeTrim(columns[7]); // NOM_ESTACIO
                 const lineSpecificCode = safeTrim(columns[6]); // CODI_ESTACIO
                 const lineName = safeTrim(columns[11]); // NOM_LINIA
+                const lineColor = safeTrim(columns[23]); // COLOR_LINIA
 
                 if (!stationName || !lineSpecificCode || !lineName) continue;
+
+                // Store line color in lineColorMap immediately from CSV
+                if (lineColor && lineColor.length > 0) {
+                    lineColorMap.set(lineName, lineColor);
+                }
 
                 if (stationsMap.has(stationName)) {
                     const stationData = stationsMap.get(stationName);
@@ -307,6 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 placeholderValue: '-- Choose a station --',
             });
             console.log(`✓ Stations loaded: ${stationsList.length} stations available`);
+            
+            // Load favorites from URL
+            loadFavoritesFromURL();
             
             // Try to load station from URL after stations are loaded
             // Use a small delay to ensure Choices.js is fully ready
@@ -471,6 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             updateTimestamp(selectedItem.customProperties.lines, mergedData);
+            
+            // Update favorites display with current station info
+            updateFavoritesDisplay();
 
             // Start auto-refreshing - preserve current station
             // Store current station data for auto-refresh
@@ -536,6 +560,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const lineName = line.nom_linia || line.nom;
                     const lineColor = line.color_linia || '808080';
                     
+                    // Update line color map
+                    if (lineName && line.color_linia) {
+                        lineColorMap.set(lineName, line.color_linia);
+                    }
+                    
                     // Check if we need fallback for this station
                     const needsFallback = !stationPlatform.linies_trajectes || 
                                          stationPlatform.linies_trajectes.length === 0 ||
@@ -555,6 +584,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 color_linia: route.color_linia,
                                 propers_trensCount: route.propers_trens?.length || 0
                             });
+                            
+                            // Update line color map from route data
+                            if (route.nom_linia && route.color_linia) {
+                                lineColorMap.set(route.nom_linia, route.color_linia);
+                            }
                             
                             if (!apiLineDataMap.has(lineName)) {
                                 apiLineDataMap.set(lineName, new Map());
@@ -1037,6 +1071,189 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Gets favorites from URL hash
+     * Format: #station-name&favorites=slug1,slug2,slug3
+     * @returns {string[]} Array of favorite station slugs
+     */
+    function getFavoritesFromURL() {
+        const hash = window.location.hash.replace('#', '');
+        if (!hash) return [];
+        
+        const parts = hash.split('&');
+        const favoritesPart = parts.find(part => part.startsWith('favorites='));
+        if (!favoritesPart) return [];
+        
+        const favoritesStr = favoritesPart.replace('favorites=', '');
+        return favoritesStr ? favoritesStr.split(',').filter(s => s) : [];
+    }
+    
+    /**
+     * Updates favorites in URL
+     * @param {string[]} favoriteSlugs - Array of favorite station slugs
+     */
+    function updateFavoritesInURL(favoriteSlugs) {
+        const hash = window.location.hash.replace('#', '');
+        const currentStation = hash.split('&')[0]; // Get station part (before &favorites=)
+        
+        let newHash = '';
+        if (currentStation && !currentStation.startsWith('favorites=')) {
+            newHash = currentStation;
+        }
+        
+        if (favoriteSlugs.length > 0) {
+            newHash += (newHash ? '&' : '') + `favorites=${favoriteSlugs.join(',')}`;
+        }
+        
+        const newURL = window.location.pathname + window.location.search + (newHash ? '#' + newHash : '');
+        if (window.history.replaceState) {
+            window.history.replaceState(null, '', newURL);
+        }
+    }
+    
+    /**
+     * Loads favorites from URL and displays them
+     */
+    function loadFavoritesFromURL() {
+        const favoriteSlugs = getFavoritesFromURL();
+        if (favoriteSlugs.length > 0) {
+            renderFavorites(favoriteSlugs);
+        } else {
+            favoritesSection.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Adds a station to favorites
+     * @param {string} stationName - The station name to add
+     */
+    function addToFavorites(stationName) {
+        const favoriteSlugs = getFavoritesFromURL();
+        const slug = stationNameToSlug(stationName);
+        
+        if (!favoriteSlugs.includes(slug)) {
+            favoriteSlugs.push(slug);
+            updateFavoritesInURL(favoriteSlugs);
+            renderFavorites(favoriteSlugs);
+        }
+    }
+    
+    /**
+     * Removes a station from favorites
+     * @param {string} stationSlug - The station slug to remove
+     */
+    function removeFromFavorites(stationSlug) {
+        const favoriteSlugs = getFavoritesFromURL().filter(s => s !== stationSlug);
+        updateFavoritesInURL(favoriteSlugs);
+        renderFavorites(favoriteSlugs);
+    }
+    
+    /**
+     * Checks if a station is in favorites
+     * @param {string} stationName - The station name to check
+     * @returns {boolean} True if station is in favorites
+     */
+    function isFavorite(stationName) {
+        const favoriteSlugs = getFavoritesFromURL();
+        const slug = stationNameToSlug(stationName);
+        return favoriteSlugs.includes(slug);
+    }
+    
+    /**
+     * Renders the favorites display
+     * @param {string[]} favoriteSlugs - Array of favorite station slugs
+     */
+    function renderFavorites(favoriteSlugs) {
+        if (favoriteSlugs.length === 0) {
+            favoritesSection.style.display = 'none';
+            return;
+        }
+        
+        favoritesSection.style.display = 'block';
+        favoritesContainer.innerHTML = '';
+        
+        favoriteSlugs.forEach(slug => {
+            // Find station by slug
+            const station = stationsList.find(s => stationNameToSlug(s.name) === slug);
+            if (!station) return;
+            
+            const favoriteItem = document.createElement('div');
+            favoriteItem.className = 'favorite-item';
+            favoriteItem.setAttribute('data-slug', slug);
+            
+            // Get line colors for this station
+            const lines = station.lines || station.customProperties?.lines || [];
+            const lineIndicators = lines.map(lineName => {
+                // Get color from lineColorMap, or use default gray
+                const color = lineColorMap.get(lineName) || '808080';
+                return `<span class="favorite-line-indicator" style="background-color: #${color}">${lineName}</span>`;
+            }).join('');
+            
+            favoriteItem.innerHTML = `
+                <div class="favorite-content">
+                    <span class="favorite-name">${station.name}</span>
+                    <div class="favorite-lines">${lineIndicators}</div>
+                </div>
+                <button class="favorite-remove" title="Remove from favorites" aria-label="Remove ${station.name} from favorites">×</button>
+            `;
+            
+            // Add click handler to load station
+            favoriteItem.querySelector('.favorite-content').addEventListener('click', () => {
+                const stationData = {
+                    value: station.value || station.name,
+                    label: station.label || station.name,
+                    customProperties: station.customProperties || {}
+                };
+                fetchStationData(stationData);
+                
+                // Update Choices.js selection
+                if (choicesInstance) {
+                    try {
+                        choicesInstance.setValue([station.name]);
+                    } catch (e) {
+                        console.warn('Could not update Choices.js:', e);
+                    }
+                }
+            });
+            
+            // Add remove handler
+            favoriteItem.querySelector('.favorite-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeFromFavorites(slug);
+            });
+            
+            favoritesContainer.appendChild(favoriteItem);
+        });
+    }
+    
+    /**
+     * Updates favorites display with current station info (for line colors)
+     */
+    function updateFavoritesDisplay() {
+        const favoriteSlugs = getFavoritesFromURL();
+        if (favoriteSlugs.length === 0) return;
+        
+        // Update line colors using the lineColorMap
+        const favoriteItems = favoritesContainer.querySelectorAll('.favorite-item');
+        favoriteItems.forEach(item => {
+            const slug = item.getAttribute('data-slug');
+            const station = stationsList.find(s => stationNameToSlug(s.name) === slug);
+            if (!station) return;
+            
+            const lines = station.lines || station.customProperties?.lines || [];
+            const lineIndicators = lines.map(lineName => {
+                // Get color from lineColorMap, or use default gray
+                const color = lineColorMap.get(lineName) || '808080';
+                return `<span class="favorite-line-indicator" style="background-color: #${color}">${lineName}</span>`;
+            }).join('');
+            
+            const linesContainer = item.querySelector('.favorite-lines');
+            if (linesContainer) {
+                linesContainer.innerHTML = lineIndicators;
+            }
+        });
+    }
+    
+    /**
      * Updates the timestamp display with the current time and line colors for multi-line stations.
      * @param {string[]} stationLines - Array of line names for the station.
      * @param {Object} apiData - The API data to extract line colors from.
@@ -1083,12 +1300,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Always include refresh button
+        // Get current station name from selected item
+        let currentStationName = '';
+        if (choicesInstance) {
+            const selectedItem = choicesInstance.getValue();
+            if (selectedItem) {
+                if (typeof selectedItem === 'string') {
+                    currentStationName = selectedItem;
+                } else if (selectedItem.value) {
+                    currentStationName = selectedItem.value;
+                } else if (selectedItem.label) {
+                    currentStationName = selectedItem.label;
+                }
+            }
+        }
+        
+        const isFav = currentStationName && isFavorite(currentStationName);
+        const favoriteBtnHTML = currentStationName ? `
+            <button id="favorite-btn" class="favorite-btn ${isFav ? 'active' : ''}" 
+                    title="${isFav ? 'Remove from favorites' : 'Add to favorites'}" 
+                    aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+            </button>
+        ` : '';
+        
+        // Always include refresh button and favorite button
         const timestampHTML = `
             <div class="timestamp-content">
                 <span>Last updated: ${formattedTime}</span>
                 <div class="line-indicators-wrapper">
                     ${lineIndicatorsHTML}
+                    ${favoriteBtnHTML}
                     <button id="refresh-btn" class="refresh-btn" title="Refresh data" aria-label="Refresh train times">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="23 4 23 10 17 10"></polyline>
@@ -1130,6 +1374,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         fetchStationData();
                     }
                 }
+            });
+        }
+        
+        // Add favorite button event listener if it exists
+        const favoriteBtn = document.getElementById('favorite-btn');
+        if (favoriteBtn && currentStationName) {
+            const newFavoriteBtn = favoriteBtn.cloneNode(true);
+            favoriteBtn.parentNode.replaceChild(newFavoriteBtn, favoriteBtn);
+            
+            newFavoriteBtn.addEventListener('click', () => {
+                if (isFavorite(currentStationName)) {
+                    const slug = stationNameToSlug(currentStationName);
+                    removeFromFavorites(slug);
+                } else {
+                    addToFavorites(currentStationName);
+                }
+                // Update timestamp to refresh button state
+                updateTimestamp(stationLines, apiData);
             });
         }
         timestampContainer.setAttribute('datetime', now.toISOString());
