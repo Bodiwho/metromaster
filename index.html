@@ -21,51 +21,64 @@
 <body>
     <div class="container">
         <header>
-            <h1>
-                <img src="https://static-web.tmb.cat/o/tmb-theme/images/logo_TMB_new.png" 
-                     alt="TMB Logo" 
-                     class="logo" 
-                     width="120" 
-                     height="40"
-                     loading="eager"> 
-                TMB Metro Master
-            </h1>
-            <p>Check the arrival times for the next trains.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="flex: 1;">
+                    <h1>
+                        <img src="https://static-web.tmb.cat/o/tmb-theme/images/logo_TMB_new.png" 
+                             alt="TMB Logo" 
+                             class="logo" 
+                             width="120" 
+                             height="40"
+                             loading="eager"> 
+                        <span data-translate="title">TMB Metro Master</span>
+                    </h1>
+                    <p data-translate="subtitle">Check the arrival times for the next trains.</p>
+                </div>
+                <div class="language-selector">
+                    <select id="language-select" data-translate-aria="selectLanguage" aria-label="Select language">
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="ca">Català</option>
+                        <option value="zh">中文</option>
+                    </select>
+                </div>
+            </div>
         </header>
 
         <main>
             <div id="favorites-section" class="favorites-section" style="display: none;">
                 <div class="favorites-header">
-                    <span>Favorite Stations</span>
+                    <span data-translate="favoriteStations">Favorite Stations</span>
                 </div>
                 <div id="favorites-container" class="favorites-container"></div>
             </div>
             
             <div class="selection-form">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                    <label for="station-select" style="flex: 1;">Choose a station:</label>
-                    <button id="copy-link-btn" class="copy-link-btn" title="Copy link to share" aria-label="Copy link to share current station">
+                    <label for="station-select" style="flex: 1;" data-translate="chooseStation">Choose a station:</label>
+                    <button id="copy-link-btn" class="copy-link-btn" data-translate-title="copyLink" data-translate-aria="copyLink" title="Copy link to share" aria-label="Copy link to share current station">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                         </svg>
                     </button>
                 </div>
-                <select id="station-select" name="stations" aria-label="Select a metro station">
-                    <option value="">Loading stations...</option>
+                <select id="station-select" name="stations" data-translate-aria="selectMetroStation" aria-label="Select a metro station">
+                    <option value="" data-translate="loadingStations">Loading stations...</option>
                 </select>
             </div>
 
             <div id="timestamp-container" aria-live="polite" aria-atomic="true"></div>
-            <div id="results-container" role="region" aria-live="polite" aria-label="Train arrival times">
+            <div id="results-container" role="region" aria-live="polite" data-translate-aria="trainArrivalTimes" aria-label="Train arrival times">
             </div>
             <div id="error-message" class="error" role="alert" aria-live="assertive"></div>
         </main>
-        <footer>made by @bodi <span class="version">v1.6</span></footer>
+        <footer><span data-translate="madeBy">Made by</span> @bodi <span class="version">v1.7</span></footer>
     </div>
 
     <!-- Choices.js JS -->
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="translations.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

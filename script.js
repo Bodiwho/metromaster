@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const timestampContainer = document.getElementById('timestamp-container');
     const favoritesSection = document.getElementById('favorites-section');
     const favoritesContainer = document.getElementById('favorites-container');
+    const languageSelect = document.getElementById('language-select');
 
     // --- State Management ---
     let autoRefreshIntervalId = null;
@@ -27,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let stationsList = []; // Store stations list for URL loading
     let lineColorMap = new Map(); // Map of line names to their colors (e.g., 'L1' -> 'CE1126')
     let selectedLineFilter = null; // Currently selected line filter (null = show all)
+    let currentLanguage = 'en'; // Current language (default: English)
 
     // --- Utility Functions ---
     /**
@@ -35,6 +37,98 @@ document.addEventListener('DOMContentLoaded', () => {
     const debugLog = (...args) => {
         if (DEBUG_MODE) console.log(...args);
     };
+
+    /**
+     * Get translation for a key
+     * @param {string} key - Translation key
+     * @returns {string} Translated text
+     */
+    function t(key) {
+        return translations[currentLanguage]?.[key] || translations['en'][key] || key;
+    }
+
+    /**
+     * Update URL with language parameter
+     * @param {string} lang - Language code (en, es, ca, zh)
+     */
+    function updateLanguageInURL(lang) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('lang', lang);
+        window.history.replaceState({}, '', url);
+    }
+
+    /**
+     * Get language from URL
+     * @returns {string} Language code
+     */
+    function getLanguageFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const lang = urlParams.get('lang');
+        if (lang && ['en', 'es', 'ca', 'zh'].includes(lang)) {
+            return lang;
+        }
+        return 'en'; // Default to English
+    }
+
+    /**
+     * Change language and update all text
+     * @param {string} lang - Language code
+     */
+    function changeLanguage(lang) {
+        if (!['en', 'es', 'ca', 'zh'].includes(lang)) return;
+        
+        currentLanguage = lang;
+        document.documentElement.lang = lang;
+        
+        // Update language selector
+        if (languageSelect) {
+            languageSelect.value = lang;
+        }
+        
+        // Update URL
+        updateLanguageInURL(lang);
+        
+        // Update all translatable elements
+        updateTranslations();
+    }
+
+    /**
+     * Update all text elements with translations
+     */
+    function updateTranslations() {
+        // Update elements with data-translate attribute
+        document.querySelectorAll('[data-translate]').forEach(el => {
+            const key = el.getAttribute('data-translate');
+            el.textContent = t(key);
+        });
+        
+        // Update title attributes
+        document.querySelectorAll('[data-translate-title]').forEach(el => {
+            const key = el.getAttribute('data-translate-title');
+            el.title = t(key);
+        });
+        
+        // Update aria-label attributes
+        document.querySelectorAll('[data-translate-aria]').forEach(el => {
+            const key = el.getAttribute('data-translate-aria');
+            el.setAttribute('aria-label', t(key));
+        });
+        
+        // Update placeholder text
+        const loadingOption = stationSelect?.querySelector('option[value=""]');
+        if (loadingOption) {
+            loadingOption.textContent = t('loadingStations');
+        }
+        
+        // Update Choices.js placeholder if instance exists
+        if (choicesInstance) {
+            // Update the placeholder by accessing the input element
+            const input = choicesInstance.input?.element;
+            if (input) {
+                input.placeholder = t('chooseStation');
+            }
+        }
+    }
 
     /**
      * Converts a station name to a URL-friendly slug
@@ -337,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 itemSelectText: '',
                 shouldSort: false,
                 placeholder: true,
-                placeholderValue: '-- Choose a station --',
+                placeholderValue: t('chooseStation'),
                 allowHTML: true, // Allow HTML in labels
                 searchChoices: true, // Enable search
                 position: 'bottom', // Always position dropdown below
@@ -356,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 150);
         } catch (error) {
             console.error("ERROR in loadStations:", error);
-            showError("Could not load stations. Please refresh the page to try again.");
+            showError(t('couldNotLoadStations'));
         }
     }
 
@@ -430,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 customPropertiesKeys: selectedItem?.customProperties ? Object.keys(selectedItem.customProperties) : [],
                 fullItem: selectedItem
             });
-            showError("Please select a station.");
+            showError(t('pleaseSelectStation'));
             updateURL(null); // Clear URL if no valid selection
             return;
         }
@@ -456,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Clear previous results and show loading state
         showError(''); // Hide error div
-        resultsContainer.innerHTML = '<p class="loading">Loading train data...</p>';
+        resultsContainer.innerHTML = `<p class="loading">${t('loadingTrainData')}</p>`;
 
         try {
             console.log(`[API] Fetching data for "${selectedItem.value}" (${stationApiCodes.length} code(s))`);
@@ -470,14 +564,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!res.ok) {
                             throw new Error(`API Error for station ID ${code}: ${res.statusText}`);
                         }
-                        return res.json();
+                    return res.json();
                     })
                     .catch(error => {
                         // Return null for failed requests so we can handle partial failures
                         if (error.name === 'AbortError') throw error;
                         console.warn(`[API] Request failed for station code ${code}:`, error.message);
                         return null;
-                    });
+                });
             });
 
             // Use allSettled to handle partial failures gracefully
@@ -585,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             console.error("ERROR in fetchStationData:", error);
-            showError("Could not get information. Please try again later.");
+            showError(t('couldNotGetInfo'));
         }
     }
 
@@ -661,31 +755,31 @@ document.addEventListener('DOMContentLoaded', () => {
                                 lineColorMap.set(route.nom_linia, route.color_linia);
                             }
                             
-                            if (!apiLineDataMap.has(lineName)) {
+                        if (!apiLineDataMap.has(lineName)) {
                                 apiLineDataMap.set(lineName, new Map());
-                            }
-                            
+                        }
+                        
                             const destinationMap = apiLineDataMap.get(lineName);
                             const destination = route.desti_trajecte;
                             
                             if (!destinationMap.has(destination)) {
-                                const lineInfoDiv = document.createElement('div');
-                                lineInfoDiv.className = 'line-info';
+                        const lineInfoDiv = document.createElement('div');
+                        lineInfoDiv.className = 'line-info';
                                 lineInfoDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
 
-                                const header = document.createElement('div');
-                                header.className = 'line-header';
+                        const header = document.createElement('div');
+                        header.className = 'line-header';
                                 header.style.backgroundColor = `#${route.color_linia || lineColor}`;
-                                header.innerHTML = `
+                        header.innerHTML = `
                                     <span>${route.nom_linia || lineName}</span>
-                                    <span>Destination: ${route.desti_trajecte}</span>
-                                `;
-                                lineInfoDiv.appendChild(header);
+                                    <span>${t('destination')} ${route.desti_trajecte}</span>
+                        `;
+                        lineInfoDiv.appendChild(header);
 
-                                const trainList = document.createElement('div');
-                                trainList.className = 'train-list';
-                                
-                                lineInfoDiv.appendChild(trainList);
+                        const trainList = document.createElement('div');
+                        trainList.className = 'train-list';
+
+                            lineInfoDiv.appendChild(trainList);
                                 destinationMap.set(destination, {
                                     element: lineInfoDiv,
                                     stationCode: stationCode,
@@ -695,26 +789,26 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             const trainList = destinationMap.get(destination).element.querySelector('.train-list');
                             
-                            if (route.propers_trens && route.propers_trens.length > 0) {
+                                if (route.propers_trens && route.propers_trens.length > 0) {
                                 console.log(`       ✅ Found ${route.propers_trens.length} real-time train(s) for ${route.nom_linia} to ${route.desti_trajecte}`);
                                 route.propers_trens.forEach((train, trainIndex) => {
                                     console.log(`         Train ${trainIndex + 1}:`, {
                                         temps_arribada: train.temps_arribada,
                                         temps_arribada_formatted: new Date(train.temps_arribada).toLocaleString()
                                     });
-                                    const trainDiv = document.createElement('div');
-                                    trainDiv.className = 'train';
-                                    trainDiv.innerHTML = `
-                                        <span class="train-destination">Next train</span>
-                                        <span class="train-arrival" data-arrival-time="${train.temps_arribada}">Calculating...</span>
-                                    `;
-                                    trainList.appendChild(trainDiv);
-                                });
-                            }
-                        });
-                    }
+                                        const trainDiv = document.createElement('div');
+                                        trainDiv.className = 'train';
+                                        trainDiv.innerHTML = `
+                                        <span class="train-destination">${t('nextTrain')}</span>
+                                        <span class="train-arrival" data-arrival-time="${train.temps_arribada}">${t('calculating')}</span>
+                                        `;
+                                        trainList.appendChild(trainDiv);
+                                    });
+                                }
+                            });
+                        }
+                    });
                 });
-            });
             
             console.log(`\n📋 [DISPLAY] API Line Data Map created:`, Array.from(apiLineDataMap.entries()).map(([line, dests]) => ({
                 line: line,
@@ -744,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add a check to ensure allStationLines is not null or undefined.
         if (!allStationLines) {
             if (apiLineDataMap.size === 0) {
-                resultsContainer.innerHTML = '<p>No line information found for this station.</p>';
+                resultsContainer.innerHTML = `<p>${t('noLineInfo')}</p>`;
             }
             return;
         }
@@ -767,11 +861,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 placeholderDiv.className = 'line-info';
                 placeholderDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
                 placeholderDiv.innerHTML = `
-                    <div class="line-header" style="background-color: #808080;">
+                        <div class="line-header" style="background-color: #808080;">
                         <span>${lineName}</span>
-                    </div>
-                    <div class="train-list">
-                        <p>No real-time data available for this line.</p>
+                        </div>
+                        <div class="train-list">
+                        <p>${t('noRealTimeData')}</p>
                     </div>
                 `;
                 resultsContainer.appendChild(placeholderDiv);
@@ -781,13 +875,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // If after all checks, the container is still empty, it means no lines were found or matched.
         if (resultsContainer.innerHTML === '' && allStationLines) {
             console.log(`\n⚠️  [DISPLAY] No data to display for any lines`);
-            resultsContainer.innerHTML = '<p>Could not retrieve data for the lines at this station.</p>';
+            resultsContainer.innerHTML = `<p>${t('couldNotRetrieveData')}</p>`;
             return false; // Indicate failure
         }
 
         const hasData = resultsContainer.children.length > 0;
         console.log(`\n✅ [DISPLAY] Display complete. Total line elements created: ${resultsContainer.children.length}`);
-        
+
         // Find all the newly created arrival elements and start their countdowns.
         startCountdownTimers();
         
@@ -936,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         header.style.backgroundColor = `#${data.color}`;
                         header.innerHTML = `
                             <span>${lineName}</span>
-                            <span>Destination: ${destination}</span>
+                            <span>${t('destination')} ${destination}</span>
                         `;
                         lineInfoDiv.appendChild(header);
 
@@ -947,8 +1041,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
-                                <span class="train-destination">Scheduled</span>
-                                <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">Calculating...</span>
+                                <span class="train-destination">${t('scheduled')}</span>
+                                <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">${t('calculating')}</span>
                             `;
                             trainList.appendChild(trainDiv);
                         });
@@ -1034,9 +1128,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             if (isNaN(hours) || isNaN(minutes)) return null;
                             
-                            const arrivalDate = new Date(today);
-                            arrivalDate.setHours(hours, minutes, seconds, 0);
-                            return arrivalDate;
+                        const arrivalDate = new Date(today);
+                        arrivalDate.setHours(hours, minutes, seconds, 0);
+                        return arrivalDate;
                         })
                         .filter(date => date !== null && date > now)
                         .sort((a, b) => a - b)
@@ -1048,8 +1142,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
-                                <span class="train-destination">Scheduled</span>
-                                <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">Calculating...</span>
+                                <span class="train-destination">${t('scheduled')}</span>
+                                <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">${t('calculating')}</span>
                             `;
                             trainListElement.appendChild(trainDiv);
                         });
@@ -1058,13 +1152,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (!foundScheduledTimes) {
-                trainListElement.innerHTML = '<p>No more scheduled departures found for today.</p>';
+                trainListElement.innerHTML = `<p>${t('noMoreDepartures')}</p>`;
             }
 
             startCountdownTimers();
         } catch (error) {
             console.warn(`[FALLBACK API] Error:`, error.message);
-            trainListElement.innerHTML = '<p>Could not retrieve scheduled times.</p>';
+            trainListElement.innerHTML = `<p>${t('couldNotRetrieveScheduled')}</p>`;
         }
     }
 
@@ -1076,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         arrivalElements.forEach(element => {
             const arrivalTimestamp = parseInt(element.getAttribute('data-arrival-time'), 10);
             if (isNaN(arrivalTimestamp)) {
-                element.textContent = 'Invalid time';
+                element.textContent = t('invalidTime');
                 return;
             }
 
@@ -1093,12 +1187,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const absoluteTime = `${arrivalHours}:${arrivalMinutes}`;
 
                 if (diffMs <= 0) {
-                    element.textContent = `Arriving now (${absoluteTime})`;
+                    element.textContent = `${t('arrivingNow')} (${absoluteTime})`;
                     element.classList.add('arriving-now');
                 } else {
                     const minutes = Math.floor(diffMs / 60000);
                     const seconds = Math.floor((diffMs % 60000) / 1000);
-                    element.innerHTML = `${absoluteTime} <span class="countdown">(in ${minutes}m ${seconds.toString().padStart(2, '0')}s)</span>`;
+                    element.innerHTML = `${absoluteTime} <span class="countdown">(${t('in')} ${minutes}m ${seconds.toString().padStart(2, '0')}s)</span>`;
                     element.classList.remove('arriving-now');
                 }
             };
@@ -1134,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timestampContainer.textContent = '';
         resultsContainer.innerHTML = '';
         if (message) {
-            errorMessageDiv.textContent = message;
+        errorMessageDiv.textContent = message;
             errorMessageDiv.setAttribute('role', 'alert');
             errorMessageDiv.style.display = 'block';
         } else {
@@ -1267,7 +1361,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="favorite-name">${station.name}</span>
                     <div class="favorite-lines">${lineIndicators}</div>
                 </div>
-                <button class="favorite-remove" title="Remove from favorites" aria-label="Remove ${station.name} from favorites">×</button>
+                <button class="favorite-remove" title="${t('removeFromFavorites')}" aria-label="${t('removeFromFavorites')}: ${station.name}">×</button>
             `;
             
             // Add click handler to load station
@@ -1366,7 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .map(lineName => {
                     const color = lineColors.get(lineName) || '808080';
                     const isActive = selectedLineFilter === lineName ? 'active' : '';
-                    return `<span class="line-indicator ${isActive}" data-line="${lineName}" style="background-color: #${color}" role="button" tabindex="0" aria-label="Filter by ${lineName}">${lineName}</span>`;
+                    return `<span class="line-indicator ${isActive}" data-line="${lineName}" style="background-color: #${color}" role="button" tabindex="0" aria-label="${t('filterBy')} ${lineName}">${lineName}</span>`;
                 })
                 .join('');
             
@@ -1393,8 +1487,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const isFav = currentStationName && isFavorite(currentStationName);
         const favoriteBtnHTML = currentStationName ? `
             <button id="favorite-btn" class="favorite-btn ${isFav ? 'active' : ''}" 
-                    title="${isFav ? 'Remove from favorites' : 'Add to favorites'}" 
-                    aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+                    title="${isFav ? t('removeFromFavorites') : t('addToFavorites')}" 
+                    aria-label="${isFav ? t('removeFromFavorites') : t('addToFavorites')}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
@@ -1405,14 +1499,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Wrap line indicators on left, buttons on right
         const timestampHTML = `
             <div class="timestamp-content">
-                <span>Last updated: ${formattedTime}</span>
+                <span>${t('lastUpdated')} ${formattedTime}</span>
                 <div class="line-indicators-wrapper">
                     <div class="line-indicators-left">
                         ${lineIndicatorsHTML}
                     </div>
                     <div class="buttons-right">
                         ${favoriteBtnHTML}
-                        <button id="refresh-btn" class="refresh-btn" title="Refresh data" aria-label="Refresh train times">
+                        <button id="refresh-btn" class="refresh-btn" title="${t('refresh')}" aria-label="${t('refreshAria')}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -1601,6 +1695,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     // Check if there's a hash in the URL on initial load
     const hasInitialHash = window.location.hash && window.location.hash.length > 1;
+    
+    // Initialize language from URL
+    currentLanguage = getLanguageFromURL();
+    document.documentElement.lang = currentLanguage;
+    if (languageSelect) {
+        languageSelect.value = currentLanguage;
+        languageSelect.addEventListener('change', (e) => {
+            changeLanguage(e.target.value);
+        });
+    }
+    
+    // Initial translation update
+    updateTranslations();
     
     loadStations();
     

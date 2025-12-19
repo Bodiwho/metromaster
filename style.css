@@ -39,6 +39,19 @@ header {
     margin-bottom: 20px;
 }
 
+header > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+header > div > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
 header h1 {
     margin: 0;
     font-size: 1.8em;
@@ -48,6 +61,32 @@ header h1 {
     justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+/* Language selector */
+.language-selector {
+    flex-shrink: 0;
+}
+
+.language-selector select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.language-selector select:hover {
+    border-color: #0078c3;
+}
+
+.language-selector select:focus {
+    outline: none;
+    border-color: #0078c3;
+    box-shadow: 0 0 0 2px rgba(0, 120, 195, 0.1);
 }
 
 .logo {
