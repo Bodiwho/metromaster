@@ -515,17 +515,66 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update favorites display with current station info
             updateFavoritesDisplay();
 
-            // Start auto-refreshing - preserve current station
-            // Store current station data for auto-refresh
-            const currentStationData = {
-                value: selectedItem.value || selectedItem.label,
-                label: selectedItem.label || selectedItem.value,
-                customProperties: selectedItem.customProperties || {}
-            };
-            
+            // Start auto-refreshing - always get current station from URL or Choices.js
+            // This ensures auto-refresh always uses the currently selected station
             autoRefreshIntervalId = setInterval(() => {
-                // Pass the station data directly to preserve it during auto-refresh
-                fetchStationData(currentStationData);
+                // Get current station from URL hash first (most reliable)
+                const hash = window.location.hash.replace('#', '');
+                if (hash) {
+                    const slug = hash.split('&')[0]; // Extract station slug (before &favorites=)
+                    if (slug) {
+                        const stationName = slugToStationName(slug, stationsList.map(s => ({ name: s.name })));
+                        if (stationName) {
+                            const stationData = stationsList.find(s => s.name === stationName);
+                            if (stationData) {
+                                const refreshStationData = {
+                                    value: stationData.value || stationData.name,
+                                    label: stationData.label || stationData.name,
+                                    customProperties: stationData.customProperties || {
+                                        apiCodes: stationData.apiCodes || [],
+                                        lines: stationData.lines || []
+                                    }
+                                };
+                                fetchStationData(refreshStationData);
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Fallback: get from Choices.js if URL doesn't have station
+                if (choicesInstance) {
+                    const getValueResult = choicesInstance.getValue();
+                    if (getValueResult) {
+                        let stationName = null;
+                        if (typeof getValueResult === 'string') {
+                            stationName = getValueResult;
+                        } else if (getValueResult.value) {
+                            stationName = getValueResult.value;
+                        } else if (getValueResult.label) {
+                            stationName = getValueResult.label;
+                        }
+                        
+                        if (stationName) {
+                            const stationData = stationsList.find(s => s.name === stationName);
+                            if (stationData) {
+                                const refreshStationData = {
+                                    value: stationData.value || stationData.name,
+                                    label: stationData.label || stationData.name,
+                                    customProperties: stationData.customProperties || {
+                                        apiCodes: stationData.apiCodes || [],
+                                        lines: stationData.lines || []
+                                    }
+                                };
+                                fetchStationData(refreshStationData);
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // If no station found, don't refresh (user might have cleared selection)
+                console.log('[Auto-refresh] No station selected, skipping refresh');
             }, AUTO_REFRESH_INTERVAL);
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -1346,19 +1395,24 @@ document.addEventListener('DOMContentLoaded', () => {
         ` : '';
         
         // Always include refresh button and favorite button
+        // Wrap line indicators on left, buttons on right
         const timestampHTML = `
             <div class="timestamp-content">
                 <span>Last updated: ${formattedTime}</span>
                 <div class="line-indicators-wrapper">
-                    ${lineIndicatorsHTML}
-                    ${favoriteBtnHTML}
-                    <button id="refresh-btn" class="refresh-btn" title="Refresh data" aria-label="Refresh train times">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                    </button>
+                    <div class="line-indicators-left">
+                        ${lineIndicatorsHTML}
+                    </div>
+                    <div class="buttons-right">
+                        ${favoriteBtnHTML}
+                        <button id="refresh-btn" class="refresh-btn" title="Refresh data" aria-label="Refresh train times">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
