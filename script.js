@@ -897,7 +897,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('All API requests failed and no fallback data available');
             }
             
-            updateTimestamp(selectedItem.customProperties.lines, mergedData);
+            // Store current station name globally for use in updateTimestamp
+            const stationName = selectedItem.value || selectedItem.label;
+            
+            updateTimestamp(selectedItem.customProperties.lines, mergedData, stationName);
             
             // Update favorites display with current station info
             updateFavoritesDisplay();
@@ -1753,7 +1756,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string[]} stationLines - Array of line names for the station.
      * @param {Object} apiData - The API data to extract line colors from.
      */
-    function updateTimestamp(stationLines = null, apiData = null) {
+    function updateTimestamp(stationLines = null, apiData = null, stationNameParam = null) {
         const now = new Date();
         const options = { 
             month: 'short', 
@@ -1796,9 +1799,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Get current station name from selected item
-        let currentStationName = '';
-        if (choicesInstance) {
+        // Get current station name from parameter first (most reliable), then from Choices.js
+        let currentStationName = stationNameParam || '';
+        if (!currentStationName && choicesInstance) {
             const selectedItem = choicesInstance.getValue();
             if (selectedItem) {
                 if (typeof selectedItem === 'string') {
@@ -1941,8 +1944,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     addToFavorites(currentStationName);
                 }
-                // Update timestamp to refresh button state
-                updateTimestamp(stationLines, apiData);
+                // Update timestamp to refresh button state (pass currentStationName from scope)
+                updateTimestamp(stationLines, apiData, currentStationName);
             });
         }
         timestampContainer.setAttribute('datetime', now.toISOString());
