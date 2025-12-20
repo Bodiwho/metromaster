@@ -1662,16 +1662,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     label: station.label || station.name,
                     customProperties: station.customProperties || {}
                 };
-                fetchStationData(stationData);
                 
-                // Update Choices.js selection
+                // Update URL with selected station
+                updateURL(station.name);
+                
+                // Update Choices.js selection and display
                 if (choicesInstance) {
                     try {
-                        choicesInstance.setValue([station.name]);
+                        const stationName = station.name;
+                        choicesInstance.setValue([stationName]);
+                        
+                        // Also set the underlying select element directly
+                        if (stationSelect) {
+                            stationSelect.value = stationName;
+                        }
+                        
+                        // Manually update the display element to ensure it shows
+                        setTimeout(() => {
+                            const singleItem = document.querySelector('.choices__item--selectable') || 
+                                             document.querySelector('.choices__single .choices__item');
+                            if (singleItem) {
+                                singleItem.textContent = stationName;
+                                console.log(`[Favorites] Updated display element with: "${stationName}"`);
+                            }
+                        }, 50);
+                        
+                        // Retry to ensure it sticks
+                        setTimeout(() => {
+                            try {
+                                choicesInstance.setValue([stationName]);
+                                const singleItem = document.querySelector('.choices__item--selectable') || 
+                                                 document.querySelector('.choices__single .choices__item');
+                                if (singleItem) {
+                                    singleItem.textContent = stationName;
+                                }
+                            } catch (e) {
+                                console.warn('Could not refresh Choices.js display:', e);
+                            }
+                        }, 200);
                     } catch (e) {
                         console.warn('Could not update Choices.js:', e);
                     }
                 }
+                
+                // Fetch station data after updating the display
+                fetchStationData(stationData);
             });
             
             // Add remove handler
