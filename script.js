@@ -395,7 +395,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            const choices = stations.map(station => {
+            // Remove any duplicate stations by value (extra safety check)
+            const uniqueStations = [];
+            const seenValues = new Set();
+            for (const station of stations) {
+                if (!seenValues.has(station.name)) {
+                    seenValues.add(station.name);
+                    uniqueStations.push(station);
+                }
+            }
+
+            const choices = uniqueStations.map(station => {
                 // Create line indicators HTML
                 const lines = station.lines || [];
                 const lineIndicators = lines.map(lineName => {
@@ -416,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Store stations list for URL loading (with full data structure)
-            stationsList = stations.map(s => ({
+            stationsList = uniqueStations.map(s => ({
                 name: s.name,
                 value: s.name,
                 label: s.name,
@@ -425,6 +435,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 customProperties: { apiCodes: s.apiCodes, lines: s.lines }
             }));
 
+            // Destroy existing Choices.js instance if it exists to prevent duplicates
+            if (choicesInstance) {
+                try {
+                    choicesInstance.destroy();
+                } catch (e) {
+                    console.warn('Error destroying Choices instance:', e);
+                }
+                choicesInstance = null;
+            }
+            
+            // Clear the select element
+            stationSelect.innerHTML = '<option value="">' + t('loadingStations') + '</option>';
+            
             choicesInstance = new Choices(stationSelect, {
                 choices: choices,
                 searchEnabled: true,
@@ -436,7 +459,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchChoices: true, // Enable search
                 position: 'bottom', // Always position dropdown below
                 maxItemCount: 8, // Limit visible items, rest scrollable
-                renderSelectedChoices: 'always' // Always show selected
+                renderSelectedChoices: 'always', // Always show selected
+                duplicateItemsAllowed: false // Prevent duplicate items
             });
             console.log(`✓ Stations loaded: ${stationsList.length} stations available`);
             
