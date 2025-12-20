@@ -32,6 +32,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Utility Functions ---
     /**
+     * Sorts line names numerically (L1, L2, L3, L9, L10, L10S, etc.)
+     * @param {string} a - First line name (e.g., "L1", "L10S")
+     * @param {string} b - Second line name (e.g., "L2", "L9")
+     * @returns {number} Comparison result for sorting
+     */
+    function sortLinesNumerically(a, b) {
+        // Extract number from line name (e.g., "L1" -> 1, "L10S" -> 10)
+        const getLineNumber = (lineName) => {
+            const match = lineName.match(/L(\d+)/);
+            return match ? parseInt(match[1], 10) : 9999; // Put non-matching lines at the end
+        };
+        
+        // Extract suffix (e.g., "L10S" -> "S", "L1" -> "")
+        const getLineSuffix = (lineName) => {
+            const match = lineName.match(/L\d+(.*)/);
+            return match ? match[1] : '';
+        };
+        
+        const numA = getLineNumber(a);
+        const numB = getLineNumber(b);
+        
+        // First sort by number
+        if (numA !== numB) {
+            return numA - numB;
+        }
+        
+        // If numbers are equal, sort by suffix (empty suffix comes first)
+        const suffixA = getLineSuffix(a);
+        const suffixB = getLineSuffix(b);
+        return suffixA.localeCompare(suffixB);
+    }
+    
+    /**
      * Conditional logging for debug mode
      */
     const debugLog = (...args) => {
@@ -128,6 +161,159 @@ document.addEventListener('DOMContentLoaded', () => {
                 input.placeholder = t('chooseStation');
             }
         }
+        
+        // Update page title
+        const currentStationName = choicesInstance?.getValue()?.value || choicesInstance?.getValue()?.label;
+        if (currentStationName) {
+            document.title = `${currentStationName} - ${t('title')}`;
+        } else {
+            document.title = t('title');
+        }
+        
+        // Update dynamically created content in results container
+        updateDynamicContentTranslations();
+        
+        // Update timestamp area (buttons, labels)
+        updateTimestampTranslations();
+        
+        // Update favorites section
+        updateFavoritesTranslations();
+    }
+    
+    /**
+     * Update translations for dynamically created content in results container
+     */
+    function updateDynamicContentTranslations() {
+        // Update "Next train" labels
+        resultsContainer.querySelectorAll('.train-destination').forEach(el => {
+            const text = el.textContent.trim();
+            if (text === 'Next train' || text === 'Próximo tren' || text === 'Pròxim tren' || text === '下一班') {
+                el.textContent = t('nextTrain');
+            } else if (text === 'Scheduled' || text === 'Programado' || text === 'Programat' || text === '已安排') {
+                el.textContent = t('scheduled');
+            }
+        });
+        
+        // Update "Destination:" labels in line headers
+        resultsContainer.querySelectorAll('.line-header').forEach(header => {
+            const spans = header.querySelectorAll('span');
+            if (spans.length >= 2) {
+                const secondSpan = spans[1];
+                const text = secondSpan.textContent;
+                // Check if it contains "Destination:" pattern
+                if (text.includes('Destination:') || text.includes('Destino:') || text.includes('Destí:') || text.includes('目的地：')) {
+                    const destination = text.split(/[:：]/).pop().trim();
+                    secondSpan.textContent = `${t('destination')} ${destination}`;
+                }
+            }
+        });
+        
+        // Update "Calculating..." text
+        resultsContainer.querySelectorAll('.train-arrival').forEach(el => {
+            if (el.textContent.trim() === 'Calculating...' || 
+                el.textContent.trim() === 'Calculando...' || 
+                el.textContent.trim() === 'Calculant...' ||
+                el.textContent.trim() === '计算中...') {
+                // Only update if it's still calculating (not a time)
+                if (!el.getAttribute('data-arrival-time') || el.classList.contains('calculating')) {
+                    el.textContent = t('calculating');
+                }
+            }
+        });
+        
+        // Update "Arriving now" text
+        resultsContainer.querySelectorAll('.train-arrival.arriving-now').forEach(el => {
+            const text = el.textContent;
+            if (text.includes('Arriving now') || text.includes('Llegando ahora') || 
+                text.includes('Arribant ara') || text.includes('即将到达')) {
+                const match = text.match(/\(([^)]+)\)/);
+                const timePart = match ? match[1] : '';
+                el.textContent = timePart ? `${t('arrivingNow')} (${timePart})` : t('arrivingNow');
+            }
+        });
+        
+        // Update "in" text in countdown
+        resultsContainer.querySelectorAll('.countdown').forEach(el => {
+            const text = el.textContent;
+            if (text.includes('in ') || text.includes('en ') || text.includes('dins de ') || text.includes('在 ')) {
+                const match = text.match(/\(([^)]+)\)/);
+                if (match) {
+                    const timePart = match[1].replace(/^(in |en |dins de |在 )/, '');
+                    el.textContent = `(${t('in')} ${timePart})`;
+                }
+            }
+        });
+        
+        // Update error messages
+        const errorDiv = document.getElementById('error-message');
+        if (errorDiv && errorDiv.textContent) {
+            const errorText = errorDiv.textContent.trim();
+            // Map common error messages to translation keys
+            const errorMap = {
+                'Please select a station.': 'pleaseSelectStation',
+                'Por favor, selecciona una estación.': 'pleaseSelectStation',
+                'Si us plau, seleccioneu una estació.': 'pleaseSelectStation',
+                '请选择一个车站。': 'pleaseSelectStation',
+                'Could not get information. Please try again later.': 'couldNotGetInfo',
+                'No se pudo obtener información. Por favor, inténtalo de nuevo más tarde.': 'couldNotGetInfo',
+                'No s\'ha pogut obtenir informació. Si us plau, torna-ho a intentar més tard.': 'couldNotGetInfo',
+                '无法获取信息。请稍后再试。': 'couldNotGetInfo'
+            };
+            if (errorMap[errorText]) {
+                errorDiv.textContent = t(errorMap[errorText]);
+            }
+        }
+    }
+    
+    /**
+     * Update translations for timestamp area (buttons, labels)
+     */
+    function updateTimestampTranslations() {
+        // Update refresh button
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.title = t('refresh');
+            refreshBtn.setAttribute('aria-label', t('refreshAria'));
+        }
+        
+        // Update favorite button
+        const favoriteBtn = document.getElementById('favorite-btn');
+        if (favoriteBtn) {
+            const isFav = favoriteBtn.classList.contains('active');
+            favoriteBtn.title = isFav ? t('removeFromFavorites') : t('addToFavorites');
+            favoriteBtn.setAttribute('aria-label', isFav ? t('removeFromFavorites') : t('addToFavorites'));
+        }
+        
+        // Update "Last updated:" label - find the timestamp text span
+        const timestampContent = timestampContainer.querySelector('.timestamp-content');
+        if (timestampContent) {
+            const timestampSpan = timestampContent.querySelector('span:first-child');
+            if (timestampSpan) {
+                const timeText = timestampSpan.textContent;
+                // Extract time part (format: "Last updated: 10:30 AM" or "10:30")
+                const timeMatch = timeText.match(/(\d{1,2}:\d{2}(?:\s+[AP]M)?)/);
+                if (timeMatch) {
+                    timestampSpan.textContent = `${t('lastUpdated')} ${timeMatch[1]}`;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Update translations for favorites section
+     */
+    function updateFavoritesTranslations() {
+        // Update favorites header
+        const favoritesHeader = document.querySelector('.favorites-header span');
+        if (favoritesHeader) {
+            favoritesHeader.textContent = t('favoriteStations');
+        }
+        
+        // Update favorite remove buttons
+        favoritesContainer.querySelectorAll('.favorite-remove').forEach(btn => {
+            btn.title = t('removeFromFavorites');
+            btn.setAttribute('aria-label', t('removeFromFavorites'));
+        });
     }
 
     /**
@@ -270,11 +456,69 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (choiceItem) {
                 // Set the value in Choices.js for UI consistency
-                try {
-                    choicesInstance.setValue([choiceItem.value || choiceItem.label]);
-                } catch (e) {
-                    console.warn('Could not set Choices.js value:', e);
-                }
+                // Use multiple methods to ensure it works on all devices, especially mobile
+                const stationValue = choiceItem.value || choiceItem.name;
+                console.log(`[URL] Setting station value: "${stationValue}"`);
+                
+                // Function to set the value - will be called multiple times
+                const setStationValue = () => {
+                    try {
+                        // Check if Choices.js is ready
+                        if (!choicesInstance) {
+                            console.warn('[URL] Choices.js instance not ready yet');
+                            return false;
+                        }
+                        
+                        // Try to set the value directly - Choices.js should handle it
+                        // We don't need to access choices array, just use setValue
+                        try {
+                            choicesInstance.setValue([stationValue]);
+                            console.log(`[URL] Set value using setValue: ${stationValue}`);
+                            
+                            // Also set the underlying select element directly
+                            if (stationSelect) {
+                                stationSelect.value = stationValue;
+                            }
+                            
+                            // Manually update the display element after a short delay
+                            setTimeout(() => {
+                                const singleItem = document.querySelector('.choices__item--selectable') || 
+                                                 document.querySelector('.choices__single .choices__item');
+                                if (singleItem) {
+                                    singleItem.textContent = stationValue;
+                                    console.log(`[URL] Updated display element with: "${stationValue}"`);
+                                } else {
+                                    // If element not found, try to find it again
+                                    setTimeout(() => {
+                                        const singleItem2 = document.querySelector('.choices__item--selectable') || 
+                                                           document.querySelector('.choices__single .choices__item');
+                                        if (singleItem2) {
+                                            singleItem2.textContent = stationValue;
+                                            console.log(`[URL] Updated display element (retry) with: "${stationValue}"`);
+                                        }
+                                    }, 200);
+                                }
+                            }, 100);
+                            
+                            return true; // Success
+                        } catch (setError) {
+                            console.warn('[URL] setValue failed:', setError);
+                            return false;
+                        }
+                    } catch (e) {
+                        console.warn('[URL] Could not set Choices.js value:', e);
+                        return false; // Failed
+                    }
+                };
+                
+                // Set immediately
+                setStationValue();
+                
+                // Retry multiple times to ensure it works (especially on mobile)
+                setTimeout(() => setStationValue(), 100);
+                setTimeout(() => setStationValue(), 300);
+                setTimeout(() => setStationValue(), 600);
+                setTimeout(() => setStationValue(), 1000);
                 
                 // Wait for Choices.js to update, then fetch data directly with the station data
                 setTimeout(() => {
@@ -294,6 +538,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Call fetchStationData directly with the station data
                     // This bypasses Choices.js getValue() issues
                     fetchStationData(stationData);
+                    
+                    // After fetching, ensure the display is still correct
+                    setTimeout(() => {
+                        try {
+                            const stationValue = choiceItem.value || choiceItem.name;
+                            if (choicesInstance) {
+                                choicesInstance.setValue([stationValue]);
+                                
+                                // Also update display element
+                                setTimeout(() => {
+                                    const singleItem = document.querySelector('.choices__item--selectable') || 
+                                                     document.querySelector('.choices__single .choices__item');
+                                    if (singleItem) {
+                                        singleItem.textContent = stationValue;
+                                        console.log(`[URL] Post-fetch: Updated display element with: "${stationValue}"`);
+                                    }
+                                }, 100);
+                            }
+                        } catch (e) {
+                            console.warn('Could not refresh Choices.js display:', e);
+                        }
+                    }, 200);
                 }, 300);
             } else {
                 console.warn(`Could not find choice item for station: ${stationName}`);
@@ -407,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const choices = uniqueStations.map(station => {
                 // Create line indicators HTML
-                const lines = station.lines || [];
+                const lines = (station.lines || []).sort(sortLinesNumerically);
                 const lineIndicators = lines.map(lineName => {
                     const color = lineColorMap.get(lineName) || '808080';
                     return `<span class="dropdown-line-indicator" style="background-color: #${color}">${lineName}</span>`;
@@ -468,10 +734,10 @@ document.addEventListener('DOMContentLoaded', () => {
             loadFavoritesFromURL();
             
             // Try to load station from URL after stations are loaded
-            // Use a small delay to ensure Choices.js is fully ready
+            // Use a longer delay to ensure Choices.js is fully ready, especially on mobile
             setTimeout(() => {
                 loadStationFromURL();
-            }, 150);
+            }, 300);
         } catch (error) {
             console.error("ERROR in loadStations:", error);
             showError(t('couldNotLoadStations'));
@@ -1372,9 +1638,10 @@ document.addEventListener('DOMContentLoaded', () => {
             favoriteItem.className = 'favorite-item';
             favoriteItem.setAttribute('data-slug', slug);
             
-            // Get line colors for this station
+            // Get line colors for this station (sorted numerically)
             const lines = station.lines || station.customProperties?.lines || [];
-            const lineIndicators = lines.map(lineName => {
+            const sortedLines = lines.sort(sortLinesNumerically);
+            const lineIndicators = sortedLines.map(lineName => {
                 // Get color from lineColorMap, or use default gray
                 const color = lineColorMap.get(lineName) || '808080';
                 return `<span class="favorite-line-indicator" style="background-color: #${color}">${lineName}</span>`;
@@ -1432,7 +1699,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!station) return;
             
             const lines = station.lines || station.customProperties?.lines || [];
-            const lineIndicators = lines.map(lineName => {
+            const sortedLines = lines.sort(sortLinesNumerically);
+            const lineIndicators = sortedLines.map(lineName => {
                 // Get color from lineColorMap, or use default gray
                 const color = lineColorMap.get(lineName) || '808080';
                 return `<span class="favorite-line-indicator" style="background-color: #${color}">${lineName}</span>`;
@@ -1478,9 +1746,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            // Build line indicators with click handlers
+            // Build line indicators with click handlers (sorted numerically)
             const lineIndicators = stationLines
-                .sort()
+                .sort(sortLinesNumerically)
                 .map(lineName => {
                     const color = lineColors.get(lineName) || '808080';
                     const isActive = selectedLineFilter === lineName ? 'active' : '';
@@ -1570,11 +1838,12 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
             
             newRefreshBtn.addEventListener('click', () => {
-                if (choicesInstance) {
-                    const selectedItem = choicesInstance.getValue();
-                    if (selectedItem && selectedItem.customProperties && selectedItem.customProperties.apiCodes) {
-                        // Get station data
-                        const stationName = selectedItem.value || selectedItem.label;
+                // First, try to get station from URL (most reliable)
+                const hash = window.location.hash.replace('#', '');
+                if (hash) {
+                    const slug = hash.split('&')[0];
+                    const stationName = slugToStationName(slug, stationsList.map(s => ({ name: s.name })));
+                    if (stationName) {
                         const stationData = stationsList.find(s => s.name === stationName);
                         if (stationData) {
                             const dataToPass = {
@@ -1582,14 +1851,45 @@ document.addEventListener('DOMContentLoaded', () => {
                                 label: stationData.label || stationData.name,
                                 customProperties: stationData.customProperties || {}
                             };
+                            console.log('[Refresh] Using station from URL:', stationName);
                             fetchStationData(dataToPass);
-                        } else {
-                            fetchStationData();
+                            return;
                         }
-                    } else {
-                        fetchStationData();
                     }
                 }
+                
+                // Fallback: try to get from Choices.js
+                if (choicesInstance) {
+                    const selectedItem = choicesInstance.getValue();
+                    if (selectedItem) {
+                        let stationName = null;
+                        if (typeof selectedItem === 'string') {
+                            stationName = selectedItem;
+                        } else if (selectedItem.value) {
+                            stationName = selectedItem.value;
+                        } else if (selectedItem.label) {
+                            stationName = selectedItem.label;
+                        }
+                        
+                        if (stationName) {
+                            const stationData = stationsList.find(s => s.name === stationName);
+                            if (stationData) {
+                                const dataToPass = {
+                                    value: stationData.value || stationData.name,
+                                    label: stationData.label || stationData.name,
+                                    customProperties: stationData.customProperties || {}
+                                };
+                                console.log('[Refresh] Using station from Choices.js:', stationName);
+                                fetchStationData(dataToPass);
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // If nothing works, show error
+                console.warn('[Refresh] No station found');
+                showError(t('pleaseSelectStation'));
             });
         }
         
