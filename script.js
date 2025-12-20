@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadStationFromURL() {
         // Prevent infinite loops
         if (loadStationRetryCount >= MAX_RETRIES) {
-            console.error(`[URL] Max retries (${MAX_RETRIES}) reached. Stations may not be loaded.`);
+            debugLog(`[URL] Max retries (${MAX_RETRIES}) reached. Stations may not be loaded.`);
             loadStationRetryCount = 0; // Reset for next attempt
             return;
         }
@@ -436,20 +436,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!choicesInstance || stationsList.length === 0) {
             loadStationRetryCount++;
             if (loadStationRetryCount % 5 === 0) { // Log every 5th retry to reduce spam
-                console.log(`[URL] Waiting for stations... (${loadStationRetryCount}/${MAX_RETRIES})`);
+                debugLog(`[URL] Waiting for stations... (${loadStationRetryCount}/${MAX_RETRIES})`);
             }
             setTimeout(loadStationFromURL, 200);
             return;
         }
         
-        console.log(`[URL] Found ${stationsList.length} stations, searching for slug: "${slug}"`);
+        debugLog(`[URL] Found ${stationsList.length} stations, searching for slug: "${slug}"`);
         loadStationRetryCount = 0; // Reset counter on success
         
         // Find station by slug using stored stations list
         const stationName = slugToStationName(slug, stationsList.map(s => ({ name: s.name })));
         
         if (stationName) {
-            console.log(`✓ Found station: "${stationName}" for slug: "${slug}"`);
+            debugLog(`✓ Found station: "${stationName}" for slug: "${slug}"`);
             
             // Find the choice item from stored list
             const choiceItem = stationsList.find(s => s.name === stationName);
@@ -458,14 +458,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Set the value in Choices.js for UI consistency
                 // Use multiple methods to ensure it works on all devices, especially mobile
                 const stationValue = choiceItem.value || choiceItem.name;
-                console.log(`[URL] Setting station value: "${stationValue}"`);
+                debugLog(`[URL] Setting station value: "${stationValue}"`);
                 
                 // Function to set the value - will be called multiple times
                 const setStationValue = () => {
                     try {
                         // Check if Choices.js is ready
                         if (!choicesInstance) {
-                            console.warn('[URL] Choices.js instance not ready yet');
+                            debugLog('[URL] Choices.js instance not ready yet');
                             return false;
                         }
                         
@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // We don't need to access choices array, just use setValue
                         try {
                             choicesInstance.setValue([stationValue]);
-                            console.log(`[URL] Set value using setValue: ${stationValue}`);
+                            debugLog(`[URL] Set value using setValue: ${stationValue}`);
                             
                             // Also set the underlying select element directly
                             if (stationSelect) {
@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                  document.querySelector('.choices__single .choices__item');
                                 if (singleItem) {
                                     singleItem.textContent = stationValue;
-                                    console.log(`[URL] Updated display element with: "${stationValue}"`);
+                                    debugLog(`[URL] Updated display element with: "${stationValue}"`);
                                 } else {
                                     // If element not found, try to find it again
                                     setTimeout(() => {
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                            document.querySelector('.choices__single .choices__item');
                                         if (singleItem2) {
                                             singleItem2.textContent = stationValue;
-                                            console.log(`[URL] Updated display element (retry) with: "${stationValue}"`);
+                                            debugLog(`[URL] Updated display element (retry) with: "${stationValue}"`);
                                         }
                                     }, 200);
                                 }
@@ -502,11 +502,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             return true; // Success
                         } catch (setError) {
-                            console.warn('[URL] setValue failed:', setError);
+                            debugLog('[URL] setValue failed:', setError);
                             return false;
                         }
                     } catch (e) {
-                        console.warn('[URL] Could not set Choices.js value:', e);
+                        debugLog('[URL] Could not set Choices.js value:', e);
                         return false; // Failed
                     }
                 };
@@ -532,8 +532,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     };
                     
-                    console.log(`[URL] Loading station data for: ${stationName}`);
-                    console.log(`[URL] Station has ${stationData.customProperties.apiCodes.length} API code(s)`);
+                    debugLog(`[URL] Loading station data for: ${stationName}`);
+                    debugLog(`[URL] Station has ${stationData.customProperties.apiCodes.length} API code(s)`);
                     
                     // Call fetchStationData directly with the station data
                     // This bypasses Choices.js getValue() issues
@@ -552,20 +552,20 @@ document.addEventListener('DOMContentLoaded', () => {
                                                      document.querySelector('.choices__single .choices__item');
                                     if (singleItem) {
                                         singleItem.textContent = stationValue;
-                                        console.log(`[URL] Post-fetch: Updated display element with: "${stationValue}"`);
+                                        debugLog(`[URL] Post-fetch: Updated display element with: "${stationValue}"`);
                                     }
                                 }, 100);
                             }
                         } catch (e) {
-                            console.warn('Could not refresh Choices.js display:', e);
+                            debugLog('Could not refresh Choices.js display:', e);
                         }
                     }, 200);
                 }, 300);
             } else {
-                console.warn(`Could not find choice item for station: ${stationName}`);
+                debugLog(`Could not find choice item for station: ${stationName}`);
             }
         } else {
-            console.warn(`Station not found for slug: ${slug}`);
+            debugLog(`Station not found for slug: ${slug}`);
             // Clear invalid URL
             updateURL(null);
         }
@@ -706,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     choicesInstance.destroy();
                 } catch (e) {
-                    console.warn('Error destroying Choices instance:', e);
+                    debugLog('Error destroying Choices instance:', e);
                 }
                 choicesInstance = null;
             }
@@ -728,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderSelectedChoices: 'always', // Always show selected
                 duplicateItemsAllowed: false // Prevent duplicate items
             });
-            console.log(`✓ Stations loaded: ${stationsList.length} stations available`);
+            debugLog(`✓ Stations loaded: ${stationsList.length} stations available`);
             
             // Load favorites from URL
             loadFavoritesFromURL();
@@ -739,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadStationFromURL();
             }, 300);
         } catch (error) {
-            console.error("ERROR in loadStations:", error);
+            debugLog("ERROR in loadStations:", error);
             showError(t('couldNotLoadStations'));
         }
     }
@@ -750,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function fetchStationData(overrideStationData = null) {
         if (!choicesInstance) {
-            console.error("Cannot fetch data: Choices.js instance is not available.");
+            debugLog("Cannot fetch data: Choices.js instance is not available.");
             return;
         }
 
@@ -770,7 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         label: getValueResult.detail.label,
                         customProperties: getValueResult.detail.customProperties || {}
                     };
-                    console.log(`[API] Extracted data from CustomEvent for: ${selectedItem.value}`);
+                    debugLog(`[API] Extracted data from CustomEvent for: ${selectedItem.value}`);
                 } else if (getValueResult.customProperties) {
                     // It's already the station data object
                     selectedItem = getValueResult;
@@ -784,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             label: fullStationData.label || fullStationData.name,
                             customProperties: fullStationData.customProperties || {}
                         };
-                        console.log(`[API] Resolved station data for: ${stationName}`);
+                        debugLog(`[API] Resolved station data for: ${stationName}`);
                     }
                 }
             } else if (typeof getValueResult === 'string' || (Array.isArray(getValueResult) && typeof getValueResult[0] === 'string')) {
@@ -797,17 +797,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         label: fullStationData.label || fullStationData.name,
                         customProperties: fullStationData.customProperties || {}
                     };
-                    console.log(`[API] Resolved station data for: ${stationName}`);
+                    debugLog(`[API] Resolved station data for: ${stationName}`);
                 } else {
-                    console.warn(`[API] Could not find station data for: ${stationName}`);
+                    debugLog(`[API] Could not find station data for: ${stationName}`);
                 }
             }
         }
         
         const stationApiCodes = selectedItem?.customProperties?.apiCodes;
         if (!stationApiCodes || stationApiCodes.length === 0) {
-            console.error('[API] No API codes found for selected station:', selectedItem);
-            console.error('[API] Selected item structure:', {
+            debugLog('[API] No API codes found for selected station:', selectedItem);
+            debugLog('[API] Selected item structure:', {
                 hasValue: !!selectedItem?.value,
                 hasLabel: !!selectedItem?.label,
                 hasCustomProperties: !!selectedItem?.customProperties,
@@ -843,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsContainer.innerHTML = `<p class="loading">${t('loadingTrainData')}</p>`;
 
         try {
-            console.log(`[API] Fetching data for "${selectedItem.value}" (${stationApiCodes.length} code(s))`);
+            debugLog(`[API] Fetching data for "${selectedItem.value}" (${stationApiCodes.length} code(s))`);
 
             // Create an array of fetch promises, one for each group code
             const fetchPromises = stationApiCodes.map((code, index) => {
@@ -859,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .catch(error => {
                         // Return null for failed requests so we can handle partial failures
                         if (error.name === 'AbortError') throw error;
-                        console.warn(`[API] Request failed for station code ${code}:`, error.message);
+                        debugLog(`[API] Request failed for station code ${code}:`, error.message);
                         return null;
                 });
             });
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!hasPrimaryData && successfulResponses.length === 0) {
                 // All requests failed, but we'll try fallback in displayResults
-                console.log('[API] All primary requests failed, will try fallback API');
+                debugLog('[API] All primary requests failed, will try fallback API');
             }
 
             resultsContainer.innerHTML = '';
@@ -964,14 +964,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // If no station found, don't refresh (user might have cleared selection)
-                console.log('[Auto-refresh] No station selected, skipping refresh');
+                debugLog('[Auto-refresh] No station selected, skipping refresh');
             }, AUTO_REFRESH_INTERVAL);
         } catch (error) {
             if (error.name === 'AbortError') {
                 debugLog('Fetch aborted by new request.');
                 return;
             }
-            console.error("ERROR in fetchStationData:", error);
+            debugLog("ERROR in fetchStationData:", error);
             showError(t('couldNotGetInfo'));
         }
     }
@@ -983,10 +983,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string[]} stationApiCodes - An array of API codes used for the station.
      */
     async function displayResults(apiData, allStationLines, stationApiCodes) {
-        console.log(`\n🎨 [DISPLAY] Processing results for display:`);
-        console.log(`   Station Lines:`, allStationLines);
-        console.log(`   API Codes:`, stationApiCodes);
-        console.log(`   API Data:`, apiData);
+        debugLog(`\n🎨 [DISPLAY] Processing results for display:`);
+        debugLog(`   Station Lines:`, allStationLines);
+        debugLog(`   API Codes:`, stationApiCodes);
+        debugLog(`   API Data:`, apiData);
         
         // Clear any existing countdowns before rendering new ones
         clearCountdownTimers();
@@ -1001,15 +1001,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const stationsNeedingFallback = new Set(); // Track which station codes need fallback
         
         if (apiData.linies) {
-            console.log(`\n📊 [DISPLAY] Processing ${apiData.linies.length} line(s) from API data`);
+            debugLog(`\n📊 [DISPLAY] Processing ${apiData.linies.length} line(s) from API data`);
             apiData.linies.forEach((line, lineIndex) => {
-                console.log(`\n   Line ${lineIndex + 1}:`, {
+                debugLog(`\n   Line ${lineIndex + 1}:`, {
                     nom: line.nom_linia || line.nom,
                     estacionsCount: line.estacions?.length || 0
                 });
                 
                 line.estacions.forEach((stationPlatform, stationIndex) => {
-                    console.log(`     Station Platform ${stationIndex + 1}:`, {
+                    debugLog(`     Station Platform ${stationIndex + 1}:`, {
                         codi_estacio: stationPlatform.codi_estacio,
                         linies_trajectesCount: stationPlatform.linies_trajectes?.length || 0
                     });
@@ -1031,12 +1031,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                          );
                     
                     if (needsFallback) {
-                        console.log(`       ⚠️  Station code ${stationCode} needs fallback data`);
+                        debugLog(`       ⚠️  Station code ${stationCode} needs fallback data`);
                         stationsNeedingFallback.add(stationCode);
                     } else {
                         // Process real-time data
                         stationPlatform.linies_trajectes.forEach((route, routeIndex) => {
-                            console.log(`       Route ${routeIndex + 1}:`, {
+                            debugLog(`       Route ${routeIndex + 1}:`, {
                                 nom_linia: route.nom_linia,
                                 desti_trajecte: route.desti_trajecte,
                                 color_linia: route.color_linia,
@@ -1083,9 +1083,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             const trainList = destinationMap.get(destination).element.querySelector('.train-list');
                             
                                 if (route.propers_trens && route.propers_trens.length > 0) {
-                                console.log(`       ✅ Found ${route.propers_trens.length} real-time train(s) for ${route.nom_linia} to ${route.desti_trajecte}`);
+                                debugLog(`       ✅ Found ${route.propers_trens.length} real-time train(s) for ${route.nom_linia} to ${route.desti_trajecte}`);
                                 route.propers_trens.forEach((train, trainIndex) => {
-                                    console.log(`         Train ${trainIndex + 1}:`, {
+                                    debugLog(`         Train ${trainIndex + 1}:`, {
                                         temps_arribada: train.temps_arribada,
                                         temps_arribada_formatted: new Date(train.temps_arribada).toLocaleString()
                                     });
@@ -1103,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 });
             
-            console.log(`\n📋 [DISPLAY] API Line Data Map created:`, Array.from(apiLineDataMap.entries()).map(([line, dests]) => ({
+            debugLog(`\n📋 [DISPLAY] API Line Data Map created:`, Array.from(apiLineDataMap.entries()).map(([line, dests]) => ({
                 line: line,
                 destinations: Array.from(dests.keys())
             })));
@@ -1112,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fetch fallback data for stations that need it
         let hasFallbackData = false;
         if (stationsNeedingFallback.size > 0) {
-            console.log(`\n🔄 [DISPLAY] Fetching fallback data for ${stationsNeedingFallback.size} station(s)...`);
+            debugLog(`\n🔄 [DISPLAY] Fetching fallback data for ${stationsNeedingFallback.size} station(s)...`);
             const fallbackPromises = Array.from(stationsNeedingFallback).map(stationCode => 
                 fetchFallbackScheduleData(stationCode)
             );
@@ -1167,13 +1167,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // If after all checks, the container is still empty, it means no lines were found or matched.
         if (resultsContainer.innerHTML === '' && allStationLines) {
-            console.log(`\n⚠️  [DISPLAY] No data to display for any lines`);
+            debugLog(`\n⚠️  [DISPLAY] No data to display for any lines`);
             resultsContainer.innerHTML = `<p>${t('couldNotRetrieveData')}</p>`;
             return false; // Indicate failure
         }
 
         const hasData = resultsContainer.children.length > 0;
-        console.log(`\n✅ [DISPLAY] Display complete. Total line elements created: ${resultsContainer.children.length}`);
+        debugLog(`\n✅ [DISPLAY] Display complete. Total line elements created: ${resultsContainer.children.length}`);
 
         // Find all the newly created arrival elements and start their countdowns.
         startCountdownTimers();
@@ -1206,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fallbackDataCache.set(stationCode, data);
             return data;
         } catch (error) {
-            console.warn(`[FALLBACK API] Error for station ${stationCode}:`, error.message);
+            debugLog(`[FALLBACK API] Error for station ${stationCode}:`, error.message);
             fallbackDataCache.set(stationCode, null);
             return null;
         }
@@ -1219,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {Object} primaryApiData - The primary API data to get line colors from.
      */
     async function processFallbackData(apiLineDataMap, allStationLines, primaryApiData) {
-        console.log(`\n🔧 [FALLBACK] Processing fallback data...`);
+        debugLog(`\n🔧 [FALLBACK] Processing fallback data...`);
         
         // Create a color map from primary API data
         const lineColorMap = new Map();
@@ -1239,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const [stationCode, data] of fallbackDataCache.entries()) {
             if (!data || !data.features) continue;
             
-            console.log(`\n   Processing station code ${stationCode}...`);
+            debugLog(`\n   Processing station code ${stationCode}...`);
             
             // Group features by line and destination
             const groupedByLine = new Map();
@@ -1250,14 +1250,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const destination = props.DESTI_TRAJECTE;
                 
                 if (!lineName || !destination || !props.HORES_PAS) {
-                    console.log(`     ⚠️  Skipping feature ${index + 1} - missing required data`);
+                    debugLog(`     ⚠️  Skipping feature ${index + 1} - missing required data`);
                     return;
                 }
                 
                 // Get color from primary API or use default
                 const color = lineColorMap.get(lineName) || '808080';
                 
-                console.log(`     Feature ${index + 1}: Line ${lineName}, Destination: ${destination}`);
+                debugLog(`     Feature ${index + 1}: Line ${lineName}, Destination: ${destination}`);
                 
                 if (!groupedByLine.has(lineName)) {
                     groupedByLine.set(lineName, new Map());
@@ -1347,9 +1347,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             color: data.color
                         });
                         
-                        console.log(`     ✅ Created display for Line ${lineName}, Destination: ${destination} with ${uniqueTimes.length} train(s)`);
+                        debugLog(`     ✅ Created display for Line ${lineName}, Destination: ${destination} with ${uniqueTimes.length} train(s)`);
                     } else {
-                        console.log(`     ⚠️  Display already exists for Line ${lineName}, Destination: ${destination} - skipping to avoid duplicate`);
+                        debugLog(`     ⚠️  Display already exists for Line ${lineName}, Destination: ${destination} - skipping to avoid duplicate`);
                     }
                 });
             });
@@ -1365,25 +1365,25 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchFallbackSchedule(trainListElement, stationCode) {
         const apiUrl = `${FALLBACK_API_URL}?app_id=${FALLBACK_APP_ID}&app_key=${FALLBACK_APP_KEY}&transit_namespace_element=metro&codi_element=${stationCode}&transit_namespace=metro`;
         
-        console.log(`\n🔄 [FALLBACK API] Request initiated:`);
-        console.log(`   URL: ${apiUrl}`);
-        console.log(`   Station Code: ${stationCode}`);
+        debugLog(`\n🔄 [FALLBACK API] Request initiated:`);
+        debugLog(`   URL: ${apiUrl}`);
+        debugLog(`   Station Code: ${stationCode}`);
 
         let foundScheduledTimes = false;
 
         try {
-            console.log(`\n📤 [FALLBACK API] Sending request...`);
+            debugLog(`\n📤 [FALLBACK API] Sending request...`);
             const response = await fetch(apiUrl);
             
-            console.log(`\n📥 [FALLBACK API] Response received:`);
-            console.log(`   Status: ${response.status} ${response.statusText}`);
-            console.log(`   Headers:`, Object.fromEntries(response.headers.entries()));
+            debugLog(`\n📥 [FALLBACK API] Response received:`);
+            debugLog(`   Status: ${response.status} ${response.statusText}`);
+            debugLog(`   Headers:`, Object.fromEntries(response.headers.entries()));
             
             if (!response.ok) throw new Error('Fallback API request failed');
             
             const data = await response.json();
-            console.log(`   ✅ Response Data:`, data);
-            console.log(`   📊 Data Structure:`, {
+            debugLog(`   ✅ Response Data:`, data);
+            debugLog(`   📊 Data Structure:`, {
                 hasFeatures: !!data.features,
                 featuresCount: data.features?.length || 0,
                 features: data.features?.map(f => ({
@@ -1450,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             startCountdownTimers();
         } catch (error) {
-            console.warn(`[FALLBACK API] Error:`, error.message);
+            debugLog(`[FALLBACK API] Error:`, error.message);
             trainListElement.innerHTML = `<p>${t('couldNotRetrieveScheduled')}</p>`;
         }
     }
@@ -1686,7 +1686,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                              document.querySelector('.choices__single .choices__item');
                             if (singleItem) {
                                 singleItem.textContent = stationName;
-                                console.log(`[Favorites] Updated display element with: "${stationName}"`);
+                                debugLog(`[Favorites] Updated display element with: "${stationName}"`);
                             }
                         }, 50);
                         
@@ -1700,11 +1700,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                     singleItem.textContent = stationName;
                                 }
                             } catch (e) {
-                                console.warn('Could not refresh Choices.js display:', e);
+                                debugLog('Could not refresh Choices.js display:', e);
                             }
                         }, 200);
                     } catch (e) {
-                        console.warn('Could not update Choices.js:', e);
+                        debugLog('Could not update Choices.js:', e);
                     }
                 }
                 
@@ -1887,9 +1887,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             const dataToPass = {
                                 value: stationData.value || stationData.name,
                                 label: stationData.label || stationData.name,
-                                customProperties: stationData.customProperties || {}
-                            };
-                            console.log('[Refresh] Using station from URL:', stationName);
+                                        customProperties: stationData.customProperties || {}
+                                    };
+                            debugLog('[Refresh] Using station from URL:', stationName);
                             fetchStationData(dataToPass);
                             return;
                         }
@@ -1917,7 +1917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     label: stationData.label || stationData.name,
                                     customProperties: stationData.customProperties || {}
                                 };
-                                console.log('[Refresh] Using station from Choices.js:', stationName);
+                                debugLog('[Refresh] Using station from Choices.js:', stationName);
                                 fetchStationData(dataToPass);
                                 return;
                             }
@@ -1926,7 +1926,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // If nothing works, show error
-                console.warn('[Refresh] No station found');
+                debugLog('[Refresh] No station found');
                 showError(t('pleaseSelectStation'));
             });
         }
@@ -2001,7 +2001,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navigator.clipboard.writeText(url).then(() => {
                 showCopyFeedback();
             }).catch(err => {
-                console.error('Failed to copy:', err);
+                debugLog('Failed to copy:', err);
                 fallbackCopyTextToClipboard(url);
             });
         } else {
@@ -2028,10 +2028,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (successful) {
                 showCopyFeedback();
             } else {
-                console.error('Fallback copy failed');
+                debugLog('Fallback copy failed');
             }
         } catch (err) {
-            console.error('Fallback copy error:', err);
+            debugLog('Fallback copy error:', err);
         }
         
         document.body.removeChild(textArea);
@@ -2084,7 +2084,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listener to the Choices.js instance
     // The 'choice' event passes a CustomEvent with detail containing the choice data
     stationSelect.addEventListener('choice', (event) => {
-        console.log('[Event] Choice event received:', event);
+        debugLog('[Event] Choice event received:', event);
         
         // Extract the choice data from the CustomEvent
         let choiceData = null;
@@ -2112,11 +2112,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (choiceData && choiceData.customProperties && choiceData.customProperties.apiCodes) {
-            console.log(`[Event] Station selected: ${choiceData.value} (${choiceData.customProperties.apiCodes.length} API code(s))`);
+            debugLog(`[Event] Station selected: ${choiceData.value} (${choiceData.customProperties.apiCodes.length} API code(s))`);
             fetchStationData(choiceData);
         } else {
             // Fallback: try to get from Choices.js getValue()
-            console.log('[Event] Could not extract from event, using Choices.js getValue()');
+            debugLog('[Event] Could not extract from event, using Choices.js getValue()');
             setTimeout(() => {
                 fetchStationData();
             }, 100);
