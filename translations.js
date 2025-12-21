@@ -21,6 +21,8 @@ const translations = {
         refreshAria: "Refresh train times",
         addToFavorites: "Add to favorites",
         removeFromFavorites: "Remove from favorites",
+        compactModeOn: "Compact view enabled",
+        compactModeOff: "Compact view disabled",
         
         // Train info
         nextTrain: "Next train",
@@ -75,6 +77,8 @@ const translations = {
         refreshAria: "Actualizar horarios de trenes",
         addToFavorites: "Añadir a favoritos",
         removeFromFavorites: "Eliminar de favoritos",
+        compactModeOn: "Vista compacta activada",
+        compactModeOff: "Vista compacta desactivada",
         
         // Train info
         nextTrain: "Próximo tren",
@@ -129,6 +133,8 @@ const translations = {
         refreshAria: "Actualitzar horaris de trens",
         addToFavorites: "Afegir a favorits",
         removeFromFavorites: "Eliminar de favorits",
+        compactModeOn: "Vista compacta activada",
+        compactModeOff: "Vista compacta desactivada",
         
         // Train info
         nextTrain: "Proper tren",
@@ -174,6 +180,8 @@ const translations = {
         refreshAria: "刷新列车时刻",
         addToFavorites: "添加到收藏",
         removeFromFavorites: "从收藏中移除",
+        compactModeOn: "紧凑视图已启用",
+        compactModeOff: "紧凑视图已禁用",
         
         // Train info
         nextTrain: "下一班",

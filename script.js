@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedLineFilter = null; // Currently selected line filter (null = show all)
     let currentLanguage = 'en'; // Current language (default: English)
     let lastApiData = null; // Cache the last API response for line indicators
+    let compactMode = false; // Compact view mode
 
     // --- Utility Functions ---
     /**
@@ -102,6 +103,71 @@ document.addEventListener('DOMContentLoaded', () => {
             return lang;
         }
         return 'en'; // Default to English
+    }
+
+    /**
+     * Get compact mode from URL
+     * @returns {boolean} True if compact mode is enabled
+     */
+    function getCompactModeFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('compact') === 'true';
+    }
+
+    /**
+     * Update URL with compact mode parameter
+     * @param {boolean} enabled - Whether compact mode is enabled
+     */
+    function updateCompactModeInURL(enabled) {
+        const url = new URL(window.location.href);
+        if (enabled) {
+            url.searchParams.set('compact', 'true');
+        } else {
+            url.searchParams.delete('compact');
+        }
+        window.history.replaceState({}, '', url);
+    }
+
+    /**
+     * Toggle compact mode
+     */
+    function toggleCompactMode() {
+        compactMode = !compactMode;
+        updateCompactModeInURL(compactMode);
+        
+        // Show toast notification
+        const message = compactMode ? t('compactModeOn') : t('compactModeOff');
+        showToast(message, '≡');
+        
+        // Debug logging
+        console.log('=== COMPACT MODE TOGGLED ===');
+        console.log('Compact mode enabled:', compactMode);
+        console.log('Results container:', resultsContainer);
+        console.log('Results HTML:', resultsContainer.innerHTML);
+        
+        // Log all line-info elements
+        const lineInfos = resultsContainer.querySelectorAll('.line-info');
+        console.log(`Found ${lineInfos.length} line-info elements`);
+        lineInfos.forEach((lineInfo, index) => {
+            console.log(`Line ${index}:`, {
+                dataLine: lineInfo.getAttribute('data-line'),
+                html: lineInfo.innerHTML,
+                header: lineInfo.querySelector('.line-header')?.textContent,
+                trains: Array.from(lineInfo.querySelectorAll('.train')).map(train => ({
+                    destination: train.querySelector('.train-destination')?.textContent,
+                    arrival: train.querySelector('.train-arrival')?.textContent,
+                    html: train.innerHTML
+                }))
+            });
+        });
+        
+        resultsContainer.classList.toggle('compact-mode', compactMode);
+        const styleBtn = document.getElementById('style-btn');
+        if (styleBtn) {
+            styleBtn.classList.toggle('active', compactMode);
+        }
+        
+        console.log('=== END DEBUG ===');
     }
 
     /**
@@ -950,6 +1016,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Shortens long station names to fit in compact view.
+     * E.g., "Hospital de Bellvitge" -> "Hospital de B."
+     */
+    function shortenStationName(name, maxLength = 20) {
+        if (name.length <= maxLength) return name;
+        
+        const words = name.split(' ');
+        if (words.length === 1) {
+            return name.substring(0, maxLength) + '.';
+        }
+        
+        // Keep first word and abbreviate others
+        let shortened = words[0];
+        for (let i = 1; i < words.length; i++) {
+            const abbrev = words[i].substring(0, 1) + '.';
+            if ((shortened + ' ' + abbrev).length <= maxLength) {
+                shortened += ' ' + abbrev;
+            } else {
+                break;
+            }
+        }
+        return shortened;
+    }
+
+    /**
      * Displays the results from the API on the page.
      * @param {object} apiData - The response object from the API.
      * @param {string[]} allStationLines - An array of all lines for the station, e.g., ['L1', 'L4'].
@@ -1032,13 +1123,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         const lineInfoDiv = document.createElement('div');
                         lineInfoDiv.className = 'line-info';
                                 lineInfoDiv.setAttribute('data-line', lineName); // Add data attribute for filtering
+                                lineInfoDiv.setAttribute('data-destination', destination); // Add destination for compact mode
 
                         const header = document.createElement('div');
                         header.className = 'line-header';
                                 header.style.backgroundColor = `#${route.color_linia || lineColor}`;
                         header.innerHTML = `
                                     <span>${route.nom_linia || lineName}</span>
-                                    <span>${t('destination')} ${route.desti_trajecte}</span>
+                                    <span>${shortenStationName(route.desti_trajecte)}</span>
                         `;
                         lineInfoDiv.appendChild(header);
 
@@ -1296,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         header.style.backgroundColor = `#${data.color}`;
                         header.innerHTML = `
                             <span>${lineName}</span>
-                            <span>${t('destination')} ${destination}</span>
+                            <span>${shortenStationName(destination)}</span>
                         `;
                         lineInfoDiv.appendChild(header);
 
@@ -1453,7 +1545,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const absoluteTime = `${arrivalHours}:${arrivalMinutes}`;
 
                 if (diffMs <= 0) {
-                    element.textContent = `${t('arrivingNow')} (${absoluteTime})`;
+                    element.textContent = `${t('arrivingNow')}`;
                     element.classList.add('arriving-now');
                 } else {
                     const minutes = Math.floor(diffMs / 60000);
@@ -1951,6 +2043,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${lineIndicatorsHTML}
                     </div>
                     <div class="buttons-right">
+                        <button id="style-btn" class="style-btn" title="Toggle compact view" aria-label="Toggle compact view">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <!-- Compact/List view icon - three horizontal bars -->
+                                <line x1="8" y1="6" x2="21" y2="6"></line>
+                                <line x1="8" y1="12" x2="21" y2="12"></line>
+                                <line x1="8" y1="18" x2="21" y2="18"></line>
+                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                            </svg>
+                        </button>
                         <button id="copy-link-btn" class="copy-link-btn" data-translate-title="copyLink" data-translate-aria="copyLink" title="Copy link to share" aria-label="Copy link to share current station">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -1976,6 +2079,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const copyLinkBtn = document.getElementById('copy-link-btn');
         if (copyLinkBtn) {
             copyLinkBtn.addEventListener('click', copyLinkToClipboard);
+        }
+        
+        // Attach event listener for style/compact mode button
+        const styleBtn = document.getElementById('style-btn');
+        if (styleBtn) {
+            styleBtn.addEventListener('click', toggleCompactMode);
+            if (compactMode) {
+                styleBtn.classList.add('active');
+            }
         }
         
         // Attach event listeners for line indicator clicks (filter by line)
@@ -2227,6 +2339,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initial translation update
     updateTranslations();
+    
+    // Initialize compact mode from URL
+    compactMode = getCompactModeFromURL();
+    if (compactMode) {
+        resultsContainer.classList.add('compact-mode');
+    }
     
     loadStations();
     

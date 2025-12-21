@@ -430,6 +430,39 @@ footer {
     color: white;
 }
 
+.style-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #495057;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    min-width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.style-btn:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.style-btn:hover {
+    background-color: #e9ecef;
+    color: #0078c3;
+}
+
+.style-btn.active {
+    background-color: #0078c3;
+    border-color: #0078c3;
+    color: white;
+}
+
 /* Refresh Button */
 .refresh-btn {
     background: #f8f9fa;
@@ -959,3 +992,82 @@ button:focus {
     outline: 2px solid #0078c3;
     outline-offset: 2px;
 }
+
+/* Compact Mode Styles */
+#results-container.compact-mode .line-info {
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f9f9f9;
+    padding: 6px 8px;
+    display: grid;
+    grid-template-columns: 32px auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    height: auto;
+    min-height: 40px;
+}
+
+#results-container.compact-mode .line-header {
+    display: contents;
+}
+
+#results-container.compact-mode .line-header span:first-child {
+    grid-column: 1;
+    background-color: inherit;
+    color: white;
+    padding: 0;
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 0.7em;
+    text-align: center;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#results-container.compact-mode .line-header span:last-child {
+    grid-column: 2;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.95em;
+}
+
+#results-container.compact-mode .train-list {
+    grid-column: 4;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+#results-container.compact-mode .train {
+    display: contents;
+}
+
+#results-container.compact-mode .train-destination {
+    display: none;
+}
+
+#results-container.compact-mode .train-arrival {
+    display: inline-flex;
+    gap: 0;
+    align-items: center;
+}
+
+#results-container.compact-mode .countdown {
+    font-weight: bold;
+    color: #333;
+}
+
+#results-container.compact-mode .eta {
+    display: none !important;
+}
+
+
