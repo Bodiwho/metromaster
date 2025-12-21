@@ -258,6 +258,12 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.title = t('removeFromFavorites');
             btn.setAttribute('aria-label', t('removeFromFavorites'));
         });
+        
+        // Update favorites info message
+        const favoritesInfo = favoritesContainer.querySelector('.favorites-info');
+        if (favoritesInfo) {
+            favoritesInfo.textContent = t('favoritesSessionOnly');
+        }
     }
 
     /**
@@ -1683,6 +1689,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             favoritesContainer.appendChild(favoriteItem);
         });
+        
+        // Add info message at the bottom
+        const infoMessage = document.createElement('div');
+        infoMessage.className = 'favorites-info';
+        infoMessage.setAttribute('data-translate', 'favoritesSessionOnly');
+        infoMessage.textContent = t('favoritesSessionOnly');
+        favoritesContainer.appendChild(infoMessage);
     }
     
     /**

@@ -9,6 +9,7 @@ const translations = {
         chooseStation: "Choose a station:",
         loadingStations: "Loading stations...",
         favoriteStations: "Favorite Stations",
+        favoritesSessionOnly: "Bookmark this page to keep them.",
         
         // Buttons
         copyLink: "Copy link to share",
@@ -62,6 +63,7 @@ const translations = {
         chooseStation: "Elige una estación:",
         loadingStations: "Cargando estaciones...",
         favoriteStations: "Estaciones Favoritas",
+        favoritesSessionOnly: "Guarda esta página para mantenerlas.",
         
         // Buttons
         copyLink: "Copiar enlace para compartir",
@@ -115,6 +117,7 @@ const translations = {
         chooseStation: "Tria una estació:",
         loadingStations: "Carregant estacions...",
         favoriteStations: "Estacions Favorites",
+        favoritesSessionOnly: "Guarda aquesta pàgina per mantenir-les.",
         
         // Buttons
         copyLink: "Copia l'enllaç per compartir",
@@ -159,6 +162,7 @@ const translations = {
         chooseStation: "选择车站:",
         loadingStations: "正在加载车站...",
         favoriteStations: "收藏车站",
+        favoritesSessionOnly: "收藏此页面以保留它们。",
         
         // Buttons
         copyLink: "复制链接分享",
