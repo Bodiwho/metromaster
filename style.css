@@ -455,8 +455,8 @@ footer {
 
 .favorites-container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .favorites-info {
@@ -474,39 +474,44 @@ footer {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 10px 12px;
     background: white;
     border: 1px solid #dee2e6;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
-    flex: 0 0 auto;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .favorite-item:hover {
     background: #f8f9fa;
     border-color: #0078c3;
-    transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .favorite-content {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
     flex: 1;
+    min-width: 0;
 }
 
 .favorite-name {
     font-size: 0.9em;
     font-weight: 500;
     color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .favorite-lines {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 }
 
 .favorite-line-indicator {
@@ -516,6 +521,24 @@ footer {
     color: white;
     font-weight: 600;
     font-size: 0.75em;
+}
+.favorite-drag-handle {
+    color: #6c757d;
+    font-size: 1.2em;
+    cursor: grab;
+    padding: 4px 6px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.favorite-item:hover .favorite-drag-handle {
+    color: #0078c3;
+}
+
+.favorite-item.dragging .favorite-drag-handle {
+    cursor: grabbing;
+    color: #0078c3;
 }
 
 .favorite-remove {
@@ -536,7 +559,10 @@ footer {
     color: white;
 }
 
-.favorite-btn {
+.favorite-item.dragging {
+    opacity: 0.5;
+    background: #f0f8ff;
+}.favorite-btn {
     background: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 6px;

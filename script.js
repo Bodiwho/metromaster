@@ -281,6 +281,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Get the element after which a dragged item should be inserted
+     * @param {HTMLElement} container - The container element
+     * @param {number} y - The Y coordinate of the mouse/touch
+     * @returns {HTMLElement|null} The element after which to insert, or null for end
+     */
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.favorite-item:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    /**
      * Converts a URL slug back to a station name (finds closest match)
      * @param {string} slug - The URL slug
      * @param {Array} stations - Array of station objects with name property
@@ -1578,6 +1597,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
+     * Moves a favorite up in the list
+     * @param {string} stationSlug - The station slug to move up
+     */
+    function moveFavoriteUp(stationSlug) {
+        const favoriteSlugs = getFavoritesFromURL();
+        const index = favoriteSlugs.indexOf(stationSlug);
+        if (index > 0) {
+            // Swap with previous item
+            [favoriteSlugs[index - 1], favoriteSlugs[index]] = [favoriteSlugs[index], favoriteSlugs[index - 1]];
+            updateFavoritesInURL(favoriteSlugs);
+            renderFavorites(favoriteSlugs);
+        }
+    }
+    
+    /**
+     * Moves a favorite down in the list
+     * @param {string} stationSlug - The station slug to move down
+     */
+    function moveFavoriteDown(stationSlug) {
+        const favoriteSlugs = getFavoritesFromURL();
+        const index = favoriteSlugs.indexOf(stationSlug);
+        if (index < favoriteSlugs.length - 1) {
+            // Swap with next item
+            [favoriteSlugs[index], favoriteSlugs[index + 1]] = [favoriteSlugs[index + 1], favoriteSlugs[index]];
+            updateFavoritesInURL(favoriteSlugs);
+            renderFavorites(favoriteSlugs);
+        }
+    }
+
+    /**
      * Checks if a station is in favorites
      * @param {string} stationName - The station name to check
      * @returns {boolean} True if station is in favorites
@@ -1609,6 +1658,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const favoriteItem = document.createElement('div');
             favoriteItem.className = 'favorite-item';
             favoriteItem.setAttribute('data-slug', slug);
+            favoriteItem.draggable = true;
+            
+            // State for touch dragging
+            let touchStartY = 0;
+            let touchItem = null;
             
             // Get line colors for this station (sorted numerically)
             const lines = station.lines || station.customProperties?.lines || [];
@@ -1620,6 +1674,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join('');
             
             favoriteItem.innerHTML = `
+                <div class="favorite-drag-handle" title="Drag to reorder">≡</div>
                 <div class="favorite-content">
                     <span class="favorite-name">${station.name}</span>
                     <div class="favorite-lines">${lineIndicators}</div>
@@ -1687,7 +1742,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeFromFavorites(slug);
             });
             
+            // Add drag event handlers for mouse/pointer
+            favoriteItem.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', favoriteItem.innerHTML);
+                favoriteItem.classList.add('dragging');
+            });
+            
+            favoriteItem.addEventListener('dragend', (e) => {
+                favoriteItem.classList.remove('dragging');
+                document.querySelectorAll('.favorite-item').forEach(item => item.classList.remove('drag-over'));
+            });
+            
+            // Add touch event handlers for mobile
+            favoriteItem.addEventListener('touchstart', (e) => {
+                touchStartY = e.touches[0].clientY;
+                touchItem = favoriteItem;
+                favoriteItem.classList.add('dragging');
+            }, { passive: true });
+            
+            favoriteItem.addEventListener('touchmove', (e) => {
+                if (!touchItem) return;
+                e.preventDefault();
+                const currentY = e.touches[0].clientY;
+                const afterElement = getDragAfterElement(favoritesContainer, currentY);
+                const infoMessage = favoritesContainer.querySelector('.favorites-info');
+                
+                if (afterElement == null) {
+                    if (infoMessage) {
+                        favoritesContainer.insertBefore(touchItem, infoMessage);
+                    } else {
+                        favoritesContainer.appendChild(touchItem);
+                    }
+                } else {
+                    favoritesContainer.insertBefore(touchItem, afterElement);
+                }
+            });
+            
+            favoriteItem.addEventListener('touchend', (e) => {
+                if (!touchItem) return;
+                favoriteItem.classList.remove('dragging');
+                document.querySelectorAll('.favorite-item').forEach(item => item.classList.remove('drag-over'));
+                
+                // Update the URL with the new order
+                const newOrder = Array.from(favoritesContainer.querySelectorAll('.favorite-item')).map(item => item.getAttribute('data-slug'));
+                updateFavoritesInURL(newOrder);
+                
+                touchItem = null;
+            });
+            
             favoritesContainer.appendChild(favoriteItem);
+        });
+        
+        // Add drag-over handlers to container
+        favoritesContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const afterElement = getDragAfterElement(favoritesContainer, e.clientY);
+            const draggingElement = favoritesContainer.querySelector('.dragging');
+            const infoMessage = favoritesContainer.querySelector('.favorites-info');
+            
+            if (afterElement == null) {
+                // Insert before info message if it exists
+                if (infoMessage) {
+                    favoritesContainer.insertBefore(draggingElement, infoMessage);
+                } else {
+                    favoritesContainer.appendChild(draggingElement);
+                }
+            } else {
+                favoritesContainer.insertBefore(draggingElement, afterElement);
+            }
+        });
+        
+        favoritesContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            // Update the URL with the new order
+            const newOrder = Array.from(favoritesContainer.querySelectorAll('.favorite-item')).map(item => item.getAttribute('data-slug'));
+            updateFavoritesInURL(newOrder);
         });
         
         // Add info message at the bottom
