@@ -1458,7 +1458,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const minutes = Math.floor(diffMs / 60000);
                     const seconds = Math.floor((diffMs % 60000) / 1000);
-                    element.innerHTML = `${absoluteTime} <span class="countdown">(${t('in')} ${minutes}m ${seconds.toString().padStart(2, '0')}s)</span>`;
+                    element.innerHTML = `<span class="countdown">${minutes}m ${seconds.toString().padStart(2, '0')}s</span> <span class="eta">${absoluteTime}</span>`;
                     element.classList.remove('arriving-now');
                 }
             };
