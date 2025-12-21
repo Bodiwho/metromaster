@@ -1686,8 +1686,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="favorite-remove" title="${t('removeFromFavorites')}" aria-label="${t('removeFromFavorites')}: ${station.name}">×</button>
             `;
             
-            // Add click handler to load station
-            favoriteItem.querySelector('.favorite-content').addEventListener('click', () => {
+            // Add click handler to load station (anywhere on the item except buttons)
+            favoriteItem.addEventListener('click', (e) => {
+                // Don't trigger if clicking on buttons
+                if (e.target.closest('button')) {
+                    return;
+                }
+                
                 const stationData = {
                     value: station.value || station.name,
                     label: station.label || station.name,
