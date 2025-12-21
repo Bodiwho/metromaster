@@ -44,14 +44,6 @@
                     </h1>
                     <p data-translate="subtitle">Check the arrival times for the next trains.</p>
                 </div>
-                <div class="language-selector">
-                    <select id="language-select" data-translate-aria="selectLanguage" aria-label="Select language">
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
-                        <option value="ca">Català</option>
-                        <option value="zh">中文</option>
-                    </select>
-                </div>
             </div>
         </header>
 
@@ -66,12 +58,14 @@
             <div class="selection-form">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
                     <label for="station-select" style="flex: 1;" data-translate="chooseStation">Choose a station:</label>
-                    <button id="copy-link-btn" class="copy-link-btn" data-translate-title="copyLink" data-translate-aria="copyLink" title="Copy link to share" aria-label="Copy link to share current station">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                        </svg>
-                    </button>
+                    <div class="language-selector">
+                        <select id="language-select" data-translate-aria="selectLanguage" aria-label="Select language">
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="ca">Català</option>
+                            <option value="zh">中文</option>
+                        </select>
+                    </div>
                 </div>
                 <select id="station-select" name="stations" data-translate-aria="selectMetroStation" aria-label="Select a metro station">
                     <option value="" data-translate="loadingStations">Loading stations...</option>
@@ -83,8 +77,11 @@
             </div>
             <div id="error-message" class="error" role="alert" aria-live="assertive"></div>
         </main>
-        <footer><span data-translate="madeBy">Made by</span> @bodi <span class="version">v2.0</span></footer>
+        <footer><span data-translate="madeBy">Made by</span> @bodi <span class="version">v2.1</span></footer>
     </div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- Choices.js JS -->
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>

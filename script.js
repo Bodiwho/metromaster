@@ -184,66 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
      * Update translations for dynamically created content in results container
      */
     function updateDynamicContentTranslations() {
-        // Update "Next train" labels
-        resultsContainer.querySelectorAll('.train-destination').forEach(el => {
-            const text = el.textContent.trim();
-            if (text === 'Next train' || text === 'Próximo tren' || text === 'Pròxim tren' || text === '下一班') {
-                el.textContent = t('nextTrain');
-            } else if (text === 'Scheduled' || text === 'Programado' || text === 'Programat' || text === '已安排') {
-                el.textContent = t('scheduled');
-            }
-        });
-        
-        // Update "Destination:" labels in line headers
-        resultsContainer.querySelectorAll('.line-header').forEach(header => {
-            const spans = header.querySelectorAll('span');
-            if (spans.length >= 2) {
-                const secondSpan = spans[1];
-                const text = secondSpan.textContent;
-                // Check if it contains "Destination:" pattern
-                if (text.includes('Destination:') || text.includes('Destino:') || text.includes('Destí:') || text.includes('目的地：')) {
-                    const destination = text.split(/[:：]/).pop().trim();
-                    secondSpan.textContent = `${t('destination')} ${destination}`;
-                }
-            }
-        });
-        
-        // Update "Calculating..." text
-        resultsContainer.querySelectorAll('.train-arrival').forEach(el => {
-            if (el.textContent.trim() === 'Calculating...' || 
-                el.textContent.trim() === 'Calculando...' || 
-                el.textContent.trim() === 'Calculant...' ||
-                el.textContent.trim() === '计算中...') {
-                // Only update if it's still calculating (not a time)
-                if (!el.getAttribute('data-arrival-time') || el.classList.contains('calculating')) {
-                    el.textContent = t('calculating');
-                }
-            }
-        });
-        
-        // Update "Arriving now" text
-        resultsContainer.querySelectorAll('.train-arrival.arriving-now').forEach(el => {
-            const text = el.textContent;
-            if (text.includes('Arriving now') || text.includes('Llegando ahora') || 
-                text.includes('Arribant ara') || text.includes('即将到达')) {
-                const match = text.match(/\(([^)]+)\)/);
-                const timePart = match ? match[1] : '';
-                el.textContent = timePart ? `${t('arrivingNow')} (${timePart})` : t('arrivingNow');
-            }
-        });
-        
-        // Update "in" text in countdown
-        resultsContainer.querySelectorAll('.countdown').forEach(el => {
-            const text = el.textContent;
-            if (text.includes('in ') || text.includes('en ') || text.includes('dins de ') || text.includes('在 ')) {
-                const match = text.match(/\(([^)]+)\)/);
-                if (match) {
-                    const timePart = match[1].replace(/^(in |en |dins de |在 )/, '');
-                    el.textContent = `(${t('in')} ${timePart})`;
-                }
-            }
-        });
-        
         // Update error messages
         const errorDiv = document.getElementById('error-message');
         if (errorDiv && errorDiv.textContent) {
@@ -263,6 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorDiv.textContent = t(errorMap[errorText]);
             }
         }
+        
+        // Restart countdown timers to refresh with new language translations
+        clearCountdownTimers();
+        startCountdownTimers();
     }
     
     /**
@@ -1092,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         const trainDiv = document.createElement('div');
                                         trainDiv.className = 'train';
                                         trainDiv.innerHTML = `
-                                        <span class="train-destination">${t('nextTrain')}</span>
+                                        <span class="train-destination" data-translate="nextTrain">${t('nextTrain')}</span>
                                         <span class="train-arrival" data-arrival-time="${train.temps_arribada}">${t('calculating')}</span>
                                         `;
                                         trainList.appendChild(trainDiv);
@@ -1334,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
-                                <span class="train-destination">${t('scheduled')}</span>
+                                <span class="train-destination" data-translate="scheduled">${t('scheduled')}</span>
                                 <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">${t('calculating')}</span>
                             `;
                             trainList.appendChild(trainDiv);
@@ -1435,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const trainDiv = document.createElement('div');
                             trainDiv.className = 'train';
                             trainDiv.innerHTML = `
-                                <span class="train-destination">${t('scheduled')}</span>
+                                <span class="train-destination" data-translate="scheduled">${t('scheduled')}</span>
                                 <span class="train-arrival" data-arrival-time="${arrivalTime.getTime()}">${t('calculating')}</span>
                             `;
                             trainListElement.appendChild(trainDiv);
@@ -1595,6 +1539,7 @@ document.addEventListener('DOMContentLoaded', () => {
             favoriteSlugs.push(slug);
             updateFavoritesInURL(favoriteSlugs);
             renderFavorites(favoriteSlugs);
+            showToast(t('addedToFavorites'), '♥');
         }
     }
     
@@ -1606,6 +1551,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const favoriteSlugs = getFavoritesFromURL().filter(s => s !== stationSlug);
         updateFavoritesInURL(favoriteSlugs);
         renderFavorites(favoriteSlugs);
+        showToast(t('removedFromFavorites'), '✕');
+        
+        // Update the favorite button state if the removed station is the currently selected one
+        const hash = window.location.hash.replace('#', '');
+        if (hash) {
+            const currentSlug = hash.split('&')[0];
+            if (currentSlug === stationSlug) {
+                // Get current station data to refresh the button
+                const stationName = slugToStationName(currentSlug, stationsList.map(s => ({ name: s.name })));
+                if (stationName) {
+                    const stationData = stationsList.find(s => s.name === stationName);
+                    if (stationData) {
+                        // Re-render timestamp to update favorite button state
+                        updateTimestamp(stationData.lines, null, stationName);
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -1835,6 +1798,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${lineIndicatorsHTML}
                     </div>
                     <div class="buttons-right">
+                        <button id="copy-link-btn" class="copy-link-btn" data-translate-title="copyLink" data-translate-aria="copyLink" title="Copy link to share" aria-label="Copy link to share current station">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                        </button>
                         ${favoriteBtnHTML}
                         <button id="refresh-btn" class="refresh-btn" title="${t('refresh')}" aria-label="${t('refreshAria')}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1849,6 +1818,12 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         
         timestampContainer.innerHTML = timestampHTML;
+        
+        // Attach event listeners for copy button
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        if (copyLinkBtn) {
+            copyLinkBtn.addEventListener('click', copyLinkToClipboard);
+        }
         
         // Attach event listeners for line indicator clicks (filter by line)
         const lineIndicatorElements = timestampContainer.querySelectorAll('.line-indicator');
@@ -1891,6 +1866,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     };
                             debugLog('[Refresh] Using station from URL:', stationName);
                             fetchStationData(dataToPass);
+                            showToast(t('dataRefreshed'), '🔄');
                             return;
                         }
                     }
@@ -1919,6 +1895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 };
                                 debugLog('[Refresh] Using station from Choices.js:', stationName);
                                 fetchStationData(dataToPass);
+                                showToast(t('dataRefreshed'), '🔄');
                                 return;
                             }
                         }
@@ -2038,6 +2015,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Shows a toast notification
+     * @param {string} message - The message to display
+     * @param {string} icon - Optional emoji or icon (default: ✓)
+     * @param {number} duration - Duration in milliseconds (default: 2000)
+     */
+    function showToast(message, icon = '✓', duration = 2000) {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
+        
+        toastContainer.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('removing');
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, duration);
+    }
+
+    /**
      * Shows visual feedback when link is copied
      */
     function showCopyFeedback() {
@@ -2047,6 +2048,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
         btn.classList.add('copied');
+        
+        // Show toast notification
+        showToast(t('linkCopied'), '✓', 2000);
         
         setTimeout(() => {
             btn.innerHTML = originalHTML;

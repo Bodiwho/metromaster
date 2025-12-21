@@ -137,6 +137,71 @@ header p {
     }
 }
 
+@keyframes slideInUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutDown {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+}
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 9999;
+    pointer-events: none;
+}
+
+.toast {
+    background: #212529;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideInUp 0.3s ease;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toast.removing {
+    animation: slideOutDown 0.3s ease forwards;
+}
+
+.toast-icon {
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+    .toast-container {
+        left: auto;
+        right: 20px;
+        width: auto;
+        max-width: 400px;
+    }
+}
+
 .line-info {
     margin-bottom: 20px;
     border: 1px solid #ddd;
@@ -313,28 +378,30 @@ footer {
 }
 
 .copy-link-btn {
-    background: transparent;
-    border: 1px solid #ddd;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
     border-radius: 6px;
     padding: 8px 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #666;
-    transition: all 0.2s ease;
+    color: #495057;
+    transition: background-color 0.2s ease, color 0.2s ease;
     min-width: 36px;
     height: 36px;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.copy-link-btn:focus {
+    outline: none;
+    box-shadow: none;
 }
 
 .copy-link-btn:hover {
-    background-color: #f5f5f5;
-    border-color: #0078c3;
+    background-color: #e9ecef;
     color: #0078c3;
-}
-
-.copy-link-btn:active {
-    transform: scale(0.95);
 }
 
 .copy-link-btn.copied {
@@ -362,14 +429,7 @@ footer {
 
 .refresh-btn:hover {
     background-color: #e9ecef;
-    border-color: #0078c3;
     color: #0078c3;
-    transform: scale(1.05);
-}
-
-.refresh-btn:active {
-    transform: rotate(180deg) scale(0.95);
-    transition: transform 0.3s ease;
 }
 
 .refresh-btn svg {
@@ -483,7 +543,6 @@ footer {
 
 .favorite-btn:hover {
     background-color: #e9ecef;
-    border-color: #0078c3;
     color: #0078c3;
 }
 

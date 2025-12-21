@@ -12,6 +12,10 @@ const translations = {
         
         // Buttons
         copyLink: "Copy link to share",
+        linkCopied: "Link copied to clipboard!",
+        addedToFavorites: "Added to favorites",
+        removedFromFavorites: "Removed from favorites",
+        dataRefreshed: "Data refreshed",
         refresh: "Refresh data",
         refreshAria: "Refresh train times",
         addToFavorites: "Add to favorites",
@@ -61,6 +65,10 @@ const translations = {
         
         // Buttons
         copyLink: "Copiar enlace para compartir",
+        linkCopied: "¡Enlace copiado al portapapeles!",
+        addedToFavorites: "Añadido a favoritos",
+        removedFromFavorites: "Eliminado de favoritos",
+        dataRefreshed: "Datos actualizados",
         refresh: "Actualizar datos",
         refreshAria: "Actualizar horarios de trenes",
         addToFavorites: "Añadir a favoritos",
@@ -110,6 +118,10 @@ const translations = {
         
         // Buttons
         copyLink: "Copia l'enllaç per compartir",
+        linkCopied: "Enllaç copiat al portapapeles!",
+        addedToFavorites: "Afegit a favorits",
+        removedFromFavorites: "Eliminat de favorits",
+        dataRefreshed: "Dades actualitzades",
         refresh: "Actualitzar dades",
         refreshAria: "Actualitzar horaris de trens",
         addToFavorites: "Afegir a favorits",
@@ -150,6 +162,10 @@ const translations = {
         
         // Buttons
         copyLink: "复制链接分享",
+        linkCopied: "链接已复制到剪贴板！",
+        addedToFavorites: "已添加到收藏",
+        removedFromFavorites: "已从收藏中移除",
+        dataRefreshed: "数据已刷新",
         refresh: "刷新数据",
         refreshAria: "刷新列车时刻",
         addToFavorites: "添加到收藏",
