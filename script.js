@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lineColorMap = new Map(); // Map of line names to their colors (e.g., 'L1' -> 'CE1126')
     let selectedLineFilter = null; // Currently selected line filter (null = show all)
     let currentLanguage = 'en'; // Current language (default: English)
+    let lastApiData = null; // Cache the last API response for line indicators
 
     // --- Utility Functions ---
     /**
@@ -869,6 +870,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Store current station name globally for use in updateTimestamp
             const stationName = selectedItem.value || selectedItem.label;
             
+            // Cache the API data for later use (e.g., when removing favorites)
+            lastApiData = mergedData;
+            
             updateTimestamp(selectedItem.customProperties.lines, mergedData, stationName);
             
             // Update favorites display with current station info
@@ -1588,8 +1592,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (stationName) {
                     const stationData = stationsList.find(s => s.name === stationName);
                     if (stationData) {
-                        // Re-render timestamp to update favorite button state
-                        updateTimestamp(stationData.lines, null, stationName);
+                        // Re-render timestamp to update favorite button state, using cached API data
+                        updateTimestamp(stationData.lines, lastApiData, stationName);
                     }
                 }
             }
@@ -1677,8 +1681,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="favorite-drag-handle" title="Drag to reorder">≡</div>
                 <div class="favorite-content">
                     <span class="favorite-name">${station.name}</span>
-                    <div class="favorite-lines">${lineIndicators}</div>
                 </div>
+                <div class="favorite-lines">${lineIndicators}</div>
                 <button class="favorite-remove" title="${t('removeFromFavorites')}" aria-label="${t('removeFromFavorites')}: ${station.name}">×</button>
             `;
             
