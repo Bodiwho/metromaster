@@ -55,7 +55,6 @@ const translations = {
 
         // Arrivals
         now: "Now",
-        scheduled: "Scheduled",
         noTrains: "No trains right now",
         couldNotGetInfo: "Could not get information. Please try again later.",
         couldNotLoadStations: "Could not load stations. Please refresh the page to try again."
@@ -109,7 +108,6 @@ const translations = {
         retry: "Reintentar",
 
         now: "Ahora",
-        scheduled: "Programado",
         noTrains: "Ahora no hay trenes",
         couldNotGetInfo: "No se pudo obtener la información. Inténtalo de nuevo más tarde.",
         couldNotLoadStations: "No se pudieron cargar las estaciones. Actualiza la página para intentarlo de nuevo."
@@ -163,7 +161,6 @@ const translations = {
         retry: "Torna-ho a provar",
 
         now: "Ara",
-        scheduled: "Programat",
         noTrains: "Ara no hi ha trens",
         couldNotGetInfo: "No s'ha pogut obtenir la informació. Torna-ho a provar més tard.",
         couldNotLoadStations: "No s'han pogut carregar les estacions. Actualitza la pàgina per tornar-ho a provar."
@@ -217,7 +214,6 @@ const translations = {
         retry: "重试",
 
         now: "进站",
-        scheduled: "时刻表",
         noTrains: "暂无列车",
         couldNotGetInfo: "无法获取信息。请稍后再试。",
         couldNotLoadStations: "无法加载车站。请刷新页面重试。"

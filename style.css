@@ -185,8 +185,12 @@ ul {
     white-space: nowrap;
 }
 
-.theme-btn {
+.topbar-actions {
+    display: flex;
     margin-right: -10px;
+}
+
+.topbar-actions .icon-btn {
     color: var(--text-2);
 }
 
@@ -565,17 +569,6 @@ ul {
     overflow-wrap: break-word;
 }
 
-.dir-note {
-    display: none;
-    margin-top: 3px;
-    font-size: 12.5px;
-    color: var(--text-3);
-}
-
-.dir.is-scheduled .dir-note {
-    display: block;
-}
-
 .dir-times {
     display: flex;
     gap: 8px;
@@ -668,8 +661,7 @@ ul {
     font-size: 15px;
 }
 
-.results.is-compact .eta-clock,
-.results.is-compact .dir-note {
+.results.is-compact .eta-clock {
     display: none;
 }
 
@@ -912,6 +904,7 @@ li:first-child > .station-row {
 }
 
 .search-results {
+    outline: none;
     flex: 1;
     min-height: 0;
     overflow-y: auto;

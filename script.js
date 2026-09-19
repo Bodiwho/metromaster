@@ -13,7 +13,8 @@
     const STATIONS_CSV_PATH = 'estacions_linia.csv';
     const AUTO_REFRESH_INTERVAL = 60 * 1000;
     const RETRY_INTERVAL = 30 * 1000;
-    const STALE_AFTER = 30 * 1000;          // refetch when coming back to the app after this long
+    const STALE_AFTER = 30 * 1000;          // data younger than this is reused without a new request
+    const SHOW_CACHED_FOR = 5 * 60 * 1000;  // older data is shown while fresh data loads, up to this age
     const SCHEDULE_CACHE_TTL = 30 * 60 * 1000;
     const TRAINS_PER_DIRECTION = 2;
     // TMB's arrival times run a little late: trains are usually at the platform about 15 s
@@ -75,6 +76,7 @@
     const $ = (id) => document.getElementById(id);
     const el = {
         themeToggle: $('theme-toggle'),
+        nearbyOpen: $('nearby-open'),
         searchOpen: $('search-open'),
         favorites: $('favorites'),
         favoritesEdit: $('favorites-edit'),
@@ -126,7 +128,6 @@
     let basePath = location.pathname;
     let refreshTimer = null;
     let tickTimer = null;
-    let loadController = null;
     let loadToken = 0;
     let credentialIndex = 0;
     let clockSkew = 0;
@@ -582,13 +583,13 @@
     }
 
     // --- TMB API ---
-    async function tmbFetch(url, params, signal) {
+    async function tmbFetch(url, params) {
         let lastError = null;
         for (let attempt = 0; attempt < CREDENTIALS.length; attempt++) {
             const index = (credentialIndex + attempt) % CREDENTIALS.length;
             const { id, key } = CREDENTIALS[index];
             const query = new URLSearchParams({ ...params, app_id: id, app_key: key });
-            const response = await fetch(`${url}?${query}`, { signal });
+            const response = await fetch(`${url}?${query}`);
             if (response.ok) {
                 credentialIndex = index;
                 return response.json();
@@ -599,14 +600,14 @@
         throw lastError;
     }
 
-    async function fetchSchedule(code, signal) {
+    async function fetchSchedule(code) {
         const cached = scheduleCache.get(code);
         if (cached && Date.now() - cached.at < SCHEDULE_CACHE_TTL) return cached.data;
         const data = await tmbFetch(SCHEDULE_URL, {
             transit_namespace: 'metro',
             transit_namespace_element: 'metro',
             codi_element: code
-        }, signal);
+        });
         scheduleCache.set(code, { at: Date.now(), data });
         return data;
     }
@@ -704,7 +705,7 @@
         if (Math.abs(clockSkew) > 12 * 60 * 60 * 1000) clockSkew = 0;
     }
 
-    async function loadBoard(station, signal) {
+    async function loadBoard(station) {
         const board = new Map();
         let liveError = null;
 
@@ -712,11 +713,10 @@
             // One request covers every line at the station. temps_teoric=true is what makes
             // L9/L10 return times at all (they only publish timetable-based arrivals).
             const sentAt = Date.now();
-            const data = await tmbFetch(ARRIVALS_URL, { estacions: station.codes.join(','), temps_teoric: 'true' }, signal);
+            const data = await tmbFetch(ARRIVALS_URL, { estacions: station.codes.join(','), temps_teoric: 'true' });
             measureClockSkew(data && data.timestamp, sentAt, Date.now());
             addArrivals(board, station, data);
         } catch (error) {
-            if (error.name === 'AbortError') throw error;
             liveError = error;
         }
         const now = serverNow();
@@ -725,10 +725,7 @@
         const missing = station.lines.filter((lineName) => !hasUpcoming(board.get(lineName), now));
         if (missing.length) {
             const codes = [...new Set(missing.flatMap((lineName) => station.codesByLine[lineName] || []))];
-            const schedules = await Promise.all(codes.map((code) => fetchSchedule(code, signal).catch((error) => {
-                if (error.name === 'AbortError') throw error;
-                return null;
-            })));
+            const schedules = await Promise.all(codes.map((code) => fetchSchedule(code).catch(() => null)));
             missing.forEach((lineName) => {
                 schedules.forEach((data) => addSchedule(board, station, lineName, data, now));
             });
@@ -751,34 +748,49 @@
     }
 
     // --- Loading & refreshing ---
+    // Results are kept per station, so switching between favorites only asks TMB again once
+    // a station's data is older than STALE_AFTER. A request already under way is shared
+    // rather than cancelled and repeated.
+    const boardCache = new Map();    // slug -> { board, at }
+    const pendingBoards = new Map(); // slug -> promise of the board being fetched
+
+    function fetchBoard(station) {
+        const pending = pendingBoards.get(station.slug);
+        if (pending) return pending;
+        const request = loadBoard(station)
+            .then((board) => {
+                boardCache.set(station.slug, { board, at: Date.now() });
+                return board;
+            })
+            .finally(() => pendingBoards.delete(station.slug));
+        pendingBoards.set(station.slug, request);
+        return request;
+    }
+
     async function refresh() {
         const station = state.station;
         if (!station) return;
         clearTimeout(refreshTimer);
-        if (loadController) loadController.abort();
-        const controller = new AbortController();
-        loadController = controller;
         const token = ++loadToken;
         state.loading = true;
         el.results.setAttribute('aria-busy', 'true');
         renderStatus();
 
         try {
-            const board = await loadBoard(station, controller.signal);
+            const board = await fetchBoard(station);
             if (token !== loadToken) return;
             state.board = board;
-            state.updatedAt = Date.now();
+            state.updatedAt = boardCache.get(station.slug).at;
             state.failed = false;
             renderBoard();
-        } catch (error) {
-            if (error.name === 'AbortError' || token !== loadToken) return;
+        } catch {
+            if (token !== loadToken) return;
             state.failed = true;
             // Keep showing the last good data; only show an error when there is nothing to show.
             if (!state.board) renderBoard();
         } finally {
             if (token === loadToken) {
                 state.loading = false;
-                loadController = null;
                 el.results.removeAttribute('aria-busy');
                 renderStatus();
                 scheduleRefresh();
@@ -789,7 +801,10 @@
     function scheduleRefresh() {
         clearTimeout(refreshTimer);
         if (!state.station || document.hidden) return;
-        refreshTimer = setTimeout(refresh, state.failed ? RETRY_INTERVAL : AUTO_REFRESH_INTERVAL);
+        const delay = state.failed || !state.updatedAt
+            ? RETRY_INTERVAL
+            : Math.max(1000, state.updatedAt + AUTO_REFRESH_INTERVAL - Date.now());
+        refreshTimer = setTimeout(refresh, delay);
     }
 
     function refreshIfStale() {
@@ -813,17 +828,24 @@
             refreshIfStale();
             return;
         }
-        if (loadController) loadController.abort();
+        // A request still running for the previous station only fills the cache now.
+        loadToken++;
+        const cached = boardCache.get(station.slug);
+        const age = cached ? Date.now() - cached.at : Infinity;
         state.station = station;
-        state.board = null;
-        state.updatedAt = 0;
+        // Recent results appear instantly; anything older than STALE_AFTER is refreshed right away.
+        state.board = age < SHOW_CACHED_FOR ? cached.board : null;
+        state.updatedAt = state.board ? cached.at : 0;
+        state.loading = false;
         state.failed = false;
         state.filter = null;
+        el.results.removeAttribute('aria-busy');
         pushRecent(station.slug);
         writeURL();
         renderAll();
         if (scrollToTop) window.scrollTo(0, 0);
-        refresh();
+        if (age < STALE_AFTER) scheduleRefresh();
+        else refresh();
     }
 
     // --- Rendering ---
@@ -912,7 +934,6 @@
             <li class="dir" data-destination="${escapeHTML(direction.destination)}" hidden>
                 <span class="dir-main">
                     <span class="dir-dest">${escapeHTML(direction.destination)}</span>
-                    <span class="dir-note">${escapeHTML(t('scheduled'))}</span>
                 </span>
                 <span class="dir-times"></span>
             </li>`).join('');
@@ -972,7 +993,6 @@
                     visible++;
                     row.hidden = false;
                     row.dataset.shown = '1';
-                    row.classList.toggle('is-scheduled', upcoming[0].scheduled);
                     const times = row.querySelector('.dir-times');
                     const html = upcoming.map((train) => etaHTML(train, now)).join('');
                     if (renderedTimes.get(times) !== html) {
@@ -1295,13 +1315,21 @@
         if (then) then();
     }
 
-    function openSearch() {
+    function openSearch({ nearby = false } = {}) {
         el.searchInput.value = '';
         if (state.nearby && state.nearby.status !== 'ok') state.nearby = null;
         renderSearch();
+        // For "near me", focus the list instead of the input so the keyboard stays closed.
+        if (nearby) el.searchResults.setAttribute('autofocus', '');
         showSheet(el.searchDialog);
+        el.searchResults.removeAttribute('autofocus');
         el.searchResults.scrollTop = 0;
-        el.searchInput.focus();
+        if (nearby) {
+            el.searchResults.focus({ preventScroll: true });
+            locateNearby();
+        } else {
+            el.searchInput.focus();
+        }
     }
 
     function openFavoritesEditor() {
@@ -1400,7 +1428,8 @@
             if (darkQuery.addEventListener) darkQuery.addEventListener('change', followSystemTheme);
             else if (darkQuery.addListener) darkQuery.addListener(followSystemTheme);
         }
-        el.searchOpen.addEventListener('click', openSearch);
+        el.searchOpen.addEventListener('click', () => openSearch());
+        el.nearbyOpen.addEventListener('click', () => openSearch({ nearby: true }));
         el.searchCancel.addEventListener('click', () => hideSheet());
         el.searchInput.addEventListener('input', () => {
             el.searchResults.scrollTop = 0;
@@ -1526,10 +1555,11 @@
         if (station && station !== state.station) {
             selectStation(station);
         } else if (!hash.station && state.station) {
-            if (loadController) loadController.abort();
+            loadToken++;
             clearTimeout(refreshTimer);
             state.station = null;
             state.board = null;
+            state.loading = false;
             renderAll();
         }
         writeURL();
