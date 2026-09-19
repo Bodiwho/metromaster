@@ -13,9 +13,16 @@
     const STATIONS_CSV_PATH = 'estacions_linia.csv';
     const AUTO_REFRESH_INTERVAL = 60 * 1000;
     const RETRY_INTERVAL = 30 * 1000;
+    const FIRST_LOAD_RETRY = 3 * 1000;      // retry sooner when nothing is on screen yet
+    const REQUEST_TIMEOUT = 10 * 1000;      // TMB sometimes stalls; give up and retry after this
     const STALE_AFTER = 30 * 1000;          // data younger than this is reused without a new request
     const SHOW_CACHED_FOR = 5 * 60 * 1000;  // older data is shown while fresh data loads, up to this age
-    const SCHEDULE_CACHE_TTL = 30 * 60 * 1000;
+    const SCHEDULE_CACHE_TTL = 3 * 60 * 60 * 1000; // timetables only change from one day to the next
+    // Lines that never publish live times: their timetable is requested alongside the live times.
+    const TIMETABLE_ONLY_LINES = new Set(['FM']);
+    const MAX_SAVED_BOARDS = 8;
+    const MAX_SAVED_SCHEDULES = 12;
+    const MAX_SAVED_CODES = 40;
     const TRAINS_PER_DIRECTION = 2;
     // TMB's arrival times run a little late: trains are usually at the platform about 15 s
     // before the published time, so every time is brought forward by this much.
@@ -32,7 +39,10 @@
         lang: 'metromaster.lang',
         compact: 'metromaster.compact',
         session: 'metromaster.session',
-        theme: 'metromaster.theme'          // plain string, also read by the inline script in index.html
+        theme: 'metromaster.theme',         // plain string, also read by the inline script in index.html
+        codes: 'metromaster.codes',         // slug -> station codes, read by the inline script in index.html
+        boards: 'metromaster.boards',       // recent arrival results, shown instantly on the next launch
+        schedules: 'metromaster.schedules'  // today's timetables for lines without live times
     };
 
     const ICONS = {
@@ -120,6 +130,7 @@
         updatedAt: 0,
         loading: false,
         failed: false,
+        loadingLines: null,  // lines whose timetable is still on its way (Set) or null
         filter: null,
         nearby: null
     };
@@ -583,13 +594,21 @@
     }
 
     // --- TMB API ---
+    function withTimeout(promise, ms) {
+        let timer;
+        const timeout = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('TMB API timed out')), Math.max(0, ms));
+        });
+        return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+    }
+
     async function tmbFetch(url, params) {
         let lastError = null;
         for (let attempt = 0; attempt < CREDENTIALS.length; attempt++) {
             const index = (credentialIndex + attempt) % CREDENTIALS.length;
             const { id, key } = CREDENTIALS[index];
             const query = new URLSearchParams({ ...params, app_id: id, app_key: key });
-            const response = await fetch(`${url}?${query}`);
+            const response = await withTimeout(fetch(`${url}?${query}`, { priority: 'high' }), REQUEST_TIMEOUT);
             if (response.ok) {
                 credentialIndex = index;
                 return response.json();
@@ -600,15 +619,61 @@
         throw lastError;
     }
 
+    /** Remembers a station's codes so index.html can request its times before the app loads. */
+    function rememberCodes(station) {
+        const saved = readJSON(local, KEYS.codes, {}) || {};
+        delete saved[station.slug];
+        const entries = [[station.slug, station.codes.join(',')], ...Object.entries(saved)];
+        writeJSON(local, KEYS.codes, Object.fromEntries(entries.slice(0, MAX_SAVED_CODES)));
+    }
+
+    /** The arrivals request index.html started before this script loaded, if it is for this station. */
+    function takeEarlyArrivals(station) {
+        const early = window.__metromasterEarly;
+        window.__metromasterEarly = null;
+        return early && early.slug === station.slug && early.codes === station.codes.join(',')
+            && Date.now() - early.sentAt < STALE_AFTER ? early : null;
+    }
+
+    function scheduleIsCurrent(entry, now) {
+        if (!entry || !entry.data || !(now - entry.at < SCHEDULE_CACHE_TTL)) return false;
+        // A timetable is for one service day (DIA); never reuse it on the next one.
+        return (entry.data.features || []).every((feature) => {
+            const dayStart = Date.parse(feature.properties && feature.properties.DIA);
+            return !Number.isFinite(dayStart) || now < dayStart + 24 * 60 * 60 * 1000;
+        });
+    }
+
     async function fetchSchedule(code) {
-        const cached = scheduleCache.get(code);
-        if (cached && Date.now() - cached.at < SCHEDULE_CACHE_TTL) return cached.data;
-        const data = await tmbFetch(SCHEDULE_URL, {
+        const now = Date.now();
+        const cached = scheduleCache.get(code) || (readJSON(local, KEYS.schedules, {}) || {})[code];
+        if (scheduleIsCurrent(cached, now)) {
+            scheduleCache.set(code, cached);
+            return cached.data;
+        }
+        const response = await tmbFetch(SCHEDULE_URL, {
             transit_namespace: 'metro',
             transit_namespace_element: 'metro',
             codi_element: code
         });
-        scheduleCache.set(code, { at: Date.now(), data });
+        // Only the fields addSchedule() uses are kept, so the saved copy stays small.
+        const data = {
+            features: (response && response.features || []).map((feature) => {
+                const props = feature.properties || {};
+                return { properties: { NOM_LINIA: props.NOM_LINIA, DESTI_TRAJECTE: props.DESTI_TRAJECTE, ID_SENTIT: props.ID_SENTIT, DIA: props.DIA, HORES_PAS: props.HORES_PAS } };
+            })
+        };
+        if (data.features.length) {
+            const entry = { at: Date.now(), data };
+            scheduleCache.set(code, entry);
+            const saved = readJSON(local, KEYS.schedules, {}) || {};
+            saved[code] = entry;
+            const kept = Object.entries(saved)
+                .filter(([, item]) => scheduleIsCurrent(item, now))
+                .sort((a, b) => b[1].at - a[1].at)
+                .slice(0, MAX_SAVED_SCHEDULES);
+            writeJSON(local, KEYS.schedules, Object.fromEntries(kept));
+        }
         return data;
     }
 
@@ -705,34 +770,24 @@
         if (Math.abs(clockSkew) > 12 * 60 * 60 * 1000) clockSkew = 0;
     }
 
-    async function loadBoard(station) {
-        const board = new Map();
-        let liveError = null;
-
-        try {
-            // One request covers every line at the station. temps_teoric=true is what makes
-            // L9/L10 return times at all (they only publish timetable-based arrivals).
-            const sentAt = Date.now();
-            const data = await tmbFetch(ARRIVALS_URL, { estacions: station.codes.join(','), temps_teoric: 'true' });
-            measureClockSkew(data && data.timestamp, sentAt, Date.now());
-            addArrivals(board, station, data);
-        } catch (error) {
-            liveError = error;
+    async function fetchArrivals(station) {
+        const early = takeEarlyArrivals(station);
+        if (early) {
+            const data = await withTimeout(early.request, REQUEST_TIMEOUT - (Date.now() - early.sentAt)).catch(() => null);
+            if (data) {
+                measureClockSkew(data.timestamp, early.sentAt, early.receivedAt || Date.now());
+                return data;
+            }
         }
-        const now = serverNow();
+        // One request covers every line at the station. temps_teoric=true is what makes
+        // L9/L10 return times at all (they only publish timetable-based arrivals).
+        const sentAt = Date.now();
+        const data = await tmbFetch(ARRIVALS_URL, { estacions: station.codes.join(','), temps_teoric: 'true' });
+        measureClockSkew(data && data.timestamp, sentAt, Date.now());
+        return data;
+    }
 
-        // Lines without upcoming trains (e.g. the Montjuïc funicular) fall back to the timetable.
-        const missing = station.lines.filter((lineName) => !hasUpcoming(board.get(lineName), now));
-        if (missing.length) {
-            const codes = [...new Set(missing.flatMap((lineName) => station.codesByLine[lineName] || []))];
-            const schedules = await Promise.all(codes.map((code) => fetchSchedule(code).catch(() => null)));
-            missing.forEach((lineName) => {
-                schedules.forEach((data) => addSchedule(board, station, lineName, data, now));
-            });
-        }
-
-        if (liveError && ![...board.values()].some((line) => hasUpcoming(line, now))) throw liveError;
-
+    function finishBoard(board) {
         board.forEach((line) => {
             line.directions.forEach((direction) => {
                 direction.list = [...direction.trains]
@@ -743,6 +798,48 @@
         return board;
     }
 
+    /**
+     * Builds a station's board. Live times are handed to onLive as soon as they arrive, so the
+     * screen doesn't wait for timetables that some lines (the funicular, or any line at night)
+     * still need; the returned promise resolves with the complete board.
+     */
+    async function loadBoard(station, onLive) {
+        const board = new Map();
+        const timetables = new Map(); // code -> promise
+        const requestTimetables = (lineNames) => lineNames.forEach((lineName) => {
+            (station.codesByLine[lineName] || []).forEach((code) => {
+                if (!timetables.has(code)) timetables.set(code, fetchSchedule(code).catch(() => null));
+            });
+        });
+        // Lines that never have live times: their timetable request runs in parallel.
+        requestTimetables(station.lines.filter((lineName) => TIMETABLE_ONLY_LINES.has(lineName)));
+
+        let liveError = null;
+        try {
+            addArrivals(board, station, await fetchArrivals(station));
+        } catch (error) {
+            liveError = error;
+        }
+
+        let now = serverNow();
+        const missing = station.lines.filter((lineName) => !hasUpcoming(board.get(lineName), now));
+        if (missing.length) {
+            if (onLive && [...board.values()].some((line) => hasUpcoming(line, now))) {
+                onLive(finishBoard(board), new Set(missing));
+            }
+            requestTimetables(missing);
+            const codes = [...new Set(missing.flatMap((lineName) => station.codesByLine[lineName] || []))];
+            const schedules = await Promise.all(codes.map((code) => timetables.get(code)));
+            now = serverNow();
+            missing.forEach((lineName) => {
+                schedules.forEach((data) => addSchedule(board, station, lineName, data, now));
+            });
+        }
+
+        if (liveError && ![...board.values()].some((line) => hasUpcoming(line, now))) throw liveError;
+        return finishBoard(board);
+    }
+
     function upcomingTrains(direction, now) {
         return direction.list.filter((train) => train.at > now - DEPARTED_AFTER).slice(0, TRAINS_PER_DIRECTION);
     }
@@ -751,20 +848,84 @@
     // Results are kept per station, so switching between favorites only asks TMB again once
     // a station's data is older than STALE_AFTER. A request already under way is shared
     // rather than cancelled and repeated.
-    const boardCache = new Map();    // slug -> { board, at }
+    const boardCache = new Map();    // slug -> { board, at, loadingLines }
     const pendingBoards = new Map(); // slug -> promise of the board being fetched
 
     function fetchBoard(station) {
         const pending = pendingBoards.get(station.slug);
         if (pending) return pending;
-        const request = loadBoard(station)
+        const request = loadBoard(station, (board, loadingLines) => {
+                // Live times are in; timetable-only lines keep a placeholder until they arrive.
+                boardCache.set(station.slug, { board, at: Date.now(), loadingLines });
+                showCachedBoard(station);
+            })
             .then((board) => {
-                boardCache.set(station.slug, { board, at: Date.now() });
+                boardCache.set(station.slug, { board, at: Date.now(), loadingLines: null });
+                saveBoards();
                 return board;
             })
             .finally(() => pendingBoards.delete(station.slug));
         pendingBoards.set(station.slug, request);
         return request;
+    }
+
+    /** Puts a station's latest results on screen, if that station is the one being shown. */
+    function showCachedBoard(station) {
+        const entry = boardCache.get(station.slug);
+        if (!entry || state.station !== station) return;
+        state.board = entry.board;
+        state.updatedAt = entry.at;
+        state.loadingLines = entry.loadingLines;
+        state.failed = false;
+        renderBoard();
+        renderStatus();
+    }
+
+    // Recent results are saved on the device, so reopening the app shows times immediately
+    // (then refreshes them) instead of an empty screen while TMB answers.
+    function saveBoards() {
+        const now = Date.now();
+        const clock = serverNow();
+        const entries = [...boardCache.entries()]
+            .filter(([, entry]) => !entry.loadingLines && now - entry.at < SHOW_CACHED_FOR)
+            .sort((a, b) => b[1].at - a[1].at)
+            .slice(0, MAX_SAVED_BOARDS)
+            .map(([slug, entry]) => [slug, {
+                at: entry.at,
+                lines: [...entry.board.values()].map((line) => [line.name, [...line.directions.values()].map((direction) => [
+                    direction.destination,
+                    direction.order,
+                    direction.list.filter((train) => train.at > clock - DEPARTED_AFTER).map((train) => [train.at, train.scheduled ? 1 : 0])
+                ])])
+            }]);
+        writeJSON(local, KEYS.boards, Object.fromEntries(entries));
+    }
+
+    function restoreBoards() {
+        const saved = readJSON(local, KEYS.boards, {}) || {};
+        const now = Date.now();
+        Object.entries(saved).forEach(([slug, entry]) => {
+            if (!entry || !Array.isArray(entry.lines) || !(entry.at <= now && now - entry.at < SHOW_CACHED_FOR)) return;
+            try {
+                const board = new Map();
+                entry.lines.forEach(([name, directions]) => {
+                    const line = { name, directions: new Map() };
+                    directions.forEach(([destination, order, trains]) => {
+                        const list = trains.map(([at, scheduled]) => ({ at, scheduled: scheduled === 1 }));
+                        line.directions.set(destination, {
+                            destination,
+                            order,
+                            trains: new Map(list.map((train) => [train.at, train.scheduled])),
+                            list
+                        });
+                    });
+                    board.set(name, line);
+                });
+                boardCache.set(slug, { board, at: entry.at, loadingLines: null });
+            } catch {
+                // Ignore a malformed entry; the station simply loads normally.
+            }
+        });
     }
 
     async function refresh() {
@@ -777,12 +938,9 @@
         renderStatus();
 
         try {
-            const board = await fetchBoard(station);
+            await fetchBoard(station);
             if (token !== loadToken) return;
-            state.board = board;
-            state.updatedAt = boardCache.get(station.slug).at;
-            state.failed = false;
-            renderBoard();
+            showCachedBoard(station);
         } catch {
             if (token !== loadToken) return;
             state.failed = true;
@@ -801,9 +959,8 @@
     function scheduleRefresh() {
         clearTimeout(refreshTimer);
         if (!state.station || document.hidden) return;
-        const delay = state.failed || !state.updatedAt
-            ? RETRY_INTERVAL
-            : Math.max(1000, state.updatedAt + AUTO_REFRESH_INTERVAL - Date.now());
+        let delay = Math.max(1000, state.updatedAt + AUTO_REFRESH_INTERVAL - Date.now());
+        if (state.failed || !state.updatedAt) delay = state.board ? RETRY_INTERVAL : FIRST_LOAD_RETRY;
         refreshTimer = setTimeout(refresh, delay);
     }
 
@@ -836,15 +993,17 @@
         // Recent results appear instantly; anything older than STALE_AFTER is refreshed right away.
         state.board = age < SHOW_CACHED_FOR ? cached.board : null;
         state.updatedAt = state.board ? cached.at : 0;
+        state.loadingLines = state.board ? cached.loadingLines : null;
         state.loading = false;
         state.failed = false;
         state.filter = null;
         el.results.removeAttribute('aria-busy');
         pushRecent(station.slug);
+        rememberCodes(station);
         writeURL();
         renderAll();
         if (scrollToTop) window.scrollTo(0, 0);
-        if (age < STALE_AFTER) scheduleRefresh();
+        if (age < STALE_AFTER && !pendingBoards.has(station.slug)) scheduleRefresh();
         else refresh();
     }
 
@@ -917,16 +1076,21 @@
         });
     }
 
-    function skeletonHTML(station) {
+    function skeletonLineHTML(lineName) {
         const row = '<li class="dir"><span class="dir-main"><span class="skeleton skeleton--dest"></span></span><span class="dir-times"><span class="eta"><span class="skeleton skeleton--time"></span></span></span></li>';
-        return station.lines.map((lineName) => `
+        return `
             <section class="line" data-line="${escapeHTML(lineName)}" aria-hidden="true">
                 ${badgeHTML(lineName)}
                 <ul class="dirs">${row}${row}</ul>
-            </section>`).join('');
+            </section>`;
+    }
+
+    function skeletonHTML(station) {
+        return station.lines.map(skeletonLineHTML).join('');
     }
 
     function lineHTML(lineName, line) {
+        if (state.loadingLines && state.loadingLines.has(lineName)) return skeletonLineHTML(lineName);
         const directions = line
             ? [...line.directions.values()].sort((a, b) => a.order - b.order || a.destination.localeCompare(b.destination))
             : [];
@@ -1559,6 +1723,7 @@
             clearTimeout(refreshTimer);
             state.station = null;
             state.board = null;
+            state.loadingLines = null;
             state.loading = false;
             renderAll();
         }
@@ -1586,16 +1751,19 @@
         }
 
         initFavorites(hash.favorites);
+        restoreBoards();
         const pathStation = readPathStation();
         const station = hash.station ? resolveSlug(hash.station) : pathStation;
         if (station) {
-            state.station = station;
-            pushRecent(station.slug);
+            selectStation(station);
+            // index.html already asked TMB for this station; use that answer even if saved data was recent.
+            if (window.__metromasterEarly && !state.loading) refresh();
+        } else {
+            window.__metromasterEarly = null;
+            writeURL();
+            renderAll();
         }
-        writeURL();
-        renderAll();
         if (openSheet === el.searchDialog) renderSearch();
-        if (state.station) refresh();
     }
 
     init();

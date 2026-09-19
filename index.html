@@ -10,6 +10,28 @@
     <meta name="format-detection" content="telephone=no">
     <title>TMB Metro Master</title>
     <script>
+      // Opening a station seen before on this device: ask TMB for its times right away instead of
+      // waiting for the rest of the page to download. script.js picks up the answer.
+      // (Same request and key as ARRIVALS_URL / CREDENTIALS[0] in script.js.)
+      (function () {
+        try {
+          var match = /^#([a-z0-9-]+)(?:&|$)/.exec(location.hash);
+          var codes = match && JSON.parse(localStorage.getItem('metromaster.codes') || '{}')[match[1]];
+          if (!window.fetch || typeof codes !== 'string' || !/^\d+(,\d+)*$/.test(codes)) return;
+          var early = { slug: match[1], codes: codes, sentAt: Date.now() };
+          early.request = fetch('https://api.tmb.cat/v1/itransit/metro/estacions?estacions=' + encodeURIComponent(codes) +
+              '&temps_teoric=true&app_id=00ebfbd8&app_key=106da0e97d453028e6751b44e675f208', { priority: 'high' })
+            .then(function (response) {
+              early.receivedAt = Date.now();
+              if (!response.ok) throw new Error('TMB API responded with ' + response.status);
+              return response.json();
+            });
+          early.request.catch(function () {});
+          window.__metromasterEarly = early;
+        } catch (e) {}
+      })();
+    </script>
+    <script>
       // Apply the saved (or system) theme before the first paint to avoid a flash.
       (function () {
         var theme = null;
@@ -128,7 +150,7 @@
                 <button type="button" data-lang="ca" lang="ca">Català</button>
                 <button type="button" data-lang="zh" lang="zh">中文</button>
             </nav>
-            <p class="credit"><span data-i18n="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer">@bodiwho</a> <span class="version">v3.2</span></p>
+            <p class="credit"><span data-i18n="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer">@bodiwho</a> <span class="version">v3.3</span></p>
         </footer>
     </div>
 
