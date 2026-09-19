@@ -1,6 +1,7 @@
 /* TMB Metro Master — mobile-first styles */
 
 :root {
+    color-scheme: light;
     --bg: #f3f4f6;
     --surface: #ffffff;
     --surface-muted: #e9ebee;
@@ -19,12 +20,34 @@
 
     --radius: 14px;
     --gutter: 16px;
+    --badge-col: 42px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
+/* Dark theme: chosen with the toggle, or following the system when nothing was chosen. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e0f12;
+    --surface: #18191d;
+    --surface-muted: #25272c;
+    --text: #f1f2f4;
+    --text-2: #a9afb8;
+    --text-3: #7a818b;
+    --hairline: rgba(255, 255, 255, 0.07);
+    --border: rgba(255, 255, 255, 0.11);
+    --star: #ffc233;
+    --now: #4cc47a;
+    --warn: #ff8a80;
+    --focus: #8ab4f8;
+    --shadow: none;
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --toast-bg: #2b2e34;
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme]) {
+        color-scheme: dark;
         --bg: #0e0f12;
         --surface: #18191d;
         --surface-muted: #25272c;
@@ -80,6 +103,11 @@ button {
     touch-action: manipulation;
 }
 
+button:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
 h1,
 h2,
 h3,
@@ -132,8 +160,16 @@ ul {
 .topbar {
     display: flex;
     align-items: center;
-    gap: 9px;
+    justify-content: space-between;
+    gap: 12px;
     height: 52px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
 }
 
 .brand-mark {
@@ -146,6 +182,21 @@ ul {
     font-size: 17px;
     font-weight: 650;
     letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+.theme-btn {
+    margin-right: -10px;
+    color: var(--text-2);
+}
+
+.theme-btn .icon-sun,
+:root[data-theme="dark"] .theme-btn .icon-moon {
+    display: none;
+}
+
+:root[data-theme="dark"] .theme-btn .icon-sun {
+    display: block;
 }
 
 /* ---------- Search trigger ---------- */
@@ -204,10 +255,7 @@ ul {
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.icon-btn:hover {
-    background: var(--surface-muted);
-}
-
+.icon-btn:hover,
 .icon-btn:active {
     background: var(--surface-muted);
 }
@@ -230,11 +278,6 @@ ul {
 
 .star-btn.is-active .icon {
     fill: currentColor;
-}
-
-button:disabled {
-    cursor: default;
-    opacity: 0.6;
 }
 
 .density-btn[aria-pressed="true"] {
@@ -337,9 +380,9 @@ button:disabled {
 .chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    height: 40px;
-    padding: 0 15px;
+    gap: 10px;
+    height: 42px;
+    padding: 0 10px 0 15px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
@@ -350,22 +393,14 @@ button:disabled {
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+.chip .badges {
+    gap: 3px;
+}
+
 .chip[aria-current="true"] {
     background: var(--text);
     border-color: transparent;
     color: var(--bg);
-}
-
-.chip-dots {
-    display: inline-flex;
-    gap: 3px;
-}
-
-.chip-dots i {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--line);
 }
 
 /* ---------- Station ---------- */
@@ -479,41 +514,37 @@ button:disabled {
     margin-top: 16px;
 }
 
+/* One block per line: the badge sits centred in a fixed left column, directions to its right. */
 .line {
+    display: grid;
+    grid-template-columns: var(--badge-col) minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: center;
+    padding: 0 14px;
     background: var(--surface);
     border: 1px solid var(--hairline);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    overflow: hidden;
 }
 
-.line-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 14px 16px 2px;
-}
-
-.line-note {
-    font-size: 12.5px;
-    color: var(--text-3);
-}
-
-.line-note--foot {
-    display: none;
+.line > .badge {
+    width: var(--badge-col);
+    min-width: 0;
+    height: 26px;
+    padding: 0;
+    font-size: 13px;
 }
 
 .dirs {
-    padding: 0 16px;
+    min-width: 0;
 }
 
 .dir {
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-height: 62px;
-    padding: 10px 0;
+    gap: 10px;
+    min-height: 64px;
+    padding: 11px 0;
     border-top: 1px solid var(--hairline);
 }
 
@@ -521,18 +552,33 @@ button:disabled {
     border-top: 0;
 }
 
-.dir-dest {
+.dir-main {
     flex: 1;
     min-width: 0;
-    font-size: 16px;
+}
+
+.dir-dest {
+    display: block;
+    font-size: 15.5px;
     font-weight: 500;
     line-height: 1.25;
     overflow-wrap: break-word;
 }
 
+.dir-note {
+    display: none;
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: var(--text-3);
+}
+
+.dir.is-scheduled .dir-note {
+    display: block;
+}
+
 .dir-times {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     flex-shrink: 0;
 }
 
@@ -540,25 +586,29 @@ button:disabled {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    min-width: 62px;
+    min-width: 60px;
     font-variant-numeric: tabular-nums;
 }
 
 .eta-wait {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--text-2);
     white-space: nowrap;
 }
 
+.eta:first-child {
+    min-width: 68px;
+}
+
 .eta:first-child .eta-wait {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 650;
     color: var(--text);
 }
 
 .eta-clock {
-    margin-top: 1px;
+    margin-top: 2px;
     font-size: 12.5px;
     color: var(--text-3);
 }
@@ -569,7 +619,7 @@ button:disabled {
 }
 
 .dir--empty {
-    min-height: 54px;
+    min-height: 56px;
     color: var(--text-3);
     font-size: 15px;
 }
@@ -587,7 +637,7 @@ button:disabled {
     margin-top: 14px;
 }
 
-/* Compact view: one continuous list, line badge in a left column, no clock times */
+/* Compact view: one continuous list with single-line rows, no clock times or notes. */
 
 .results.is-compact {
     gap: 0;
@@ -599,8 +649,6 @@ button:disabled {
 }
 
 .results.is-compact .line {
-    display: grid;
-    grid-template-columns: 58px 1fr;
     border: 0;
     border-top: 1px solid var(--hairline);
     border-radius: 0;
@@ -611,24 +659,8 @@ button:disabled {
     border-top: 0;
 }
 
-.results.is-compact .line-head {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-    align-items: flex-start;
-    padding: 12px 0 0 14px;
-}
-
-.results.is-compact .line-head .line-note {
-    display: none;
-}
-
-.results.is-compact .dirs {
-    grid-column: 2;
-    padding: 0 14px 0 0;
-}
-
 .results.is-compact .dir {
-    min-height: 48px;
+    min-height: 50px;
     padding: 8px 0;
 }
 
@@ -636,23 +668,13 @@ button:disabled {
     font-size: 15px;
 }
 
-.results.is-compact .eta {
-    min-width: 54px;
-}
-
-.results.is-compact .eta-clock {
+.results.is-compact .eta-clock,
+.results.is-compact .dir-note {
     display: none;
 }
 
 .results.is-compact .eta:first-child .eta-wait {
     font-size: 16px;
-}
-
-.results.is-compact .line-note--foot {
-    display: block;
-    grid-column: 2;
-    padding: 0 14px 10px 0;
-    margin-top: -4px;
 }
 
 /* Loading placeholders */
@@ -666,11 +688,11 @@ button:disabled {
 }
 
 .skeleton--dest {
-    width: 46%;
+    width: 62%;
 }
 
 .skeleton--time {
-    width: 52px;
+    width: 58px;
     height: 17px;
 }
 
@@ -739,10 +761,6 @@ button:disabled {
 
 .list-block {
     margin-top: 12px;
-}
-
-.edit-empty {
-    padding: 16px;
 }
 
 .list-group {
@@ -940,7 +958,7 @@ li:first-child > .station-row {
 .edit-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     min-height: 54px;
     padding: 0 6px 0 4px;
     border-top: 1px solid var(--hairline);
@@ -968,6 +986,10 @@ li:first-child > .station-row {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.edit-empty {
+    padding: 16px;
 }
 
 .drag-handle {
@@ -1094,7 +1116,7 @@ li:first-child > .station-row {
 }
 
 .languages button {
-    padding: 10px 10px;
+    padding: 10px;
     border: 0;
     border-radius: 8px;
     background: none;
@@ -1122,7 +1144,54 @@ li:first-child > .station-row {
     opacity: 0.8;
 }
 
-/* ---------- Larger screens ---------- */
+/* ---------- Screen sizes ---------- */
+
+/* Small phones (iPhone SE and similar): give destinations more room. */
+@media (max-width: 359px) {
+    :root {
+        --gutter: 12px;
+        --badge-col: 38px;
+    }
+
+    .line {
+        padding: 0 12px;
+        column-gap: 10px;
+    }
+
+    .line > .badge {
+        font-size: 12px;
+    }
+
+    .dir-dest {
+        font-size: 14.5px;
+    }
+
+    .dir-times {
+        gap: 6px;
+    }
+
+    .eta {
+        min-width: 54px;
+    }
+
+    .eta:first-child {
+        min-width: 62px;
+    }
+
+    .eta-wait {
+        font-size: 14px;
+    }
+
+    .eta:first-child .eta-wait,
+    .results.is-compact .eta:first-child .eta-wait {
+        font-size: 15.5px;
+    }
+
+    .station-name,
+    .home-title {
+        font-size: 25px;
+    }
+}
 
 @media (min-width: 640px) {
     .app {

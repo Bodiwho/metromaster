@@ -11,13 +11,16 @@
         { id: '4c132798', key: 'a828910cef5a0376607986191db19d14' }
     ];
     const STATIONS_CSV_PATH = 'estacions_linia.csv';
-    const AUTO_REFRESH_INTERVAL = 120 * 1000; // same as v2; countdowns tick locally in between
+    const AUTO_REFRESH_INTERVAL = 60 * 1000;
     const RETRY_INTERVAL = 30 * 1000;
     const STALE_AFTER = 30 * 1000;          // refetch when coming back to the app after this long
     const SCHEDULE_CACHE_TTL = 30 * 60 * 1000;
     const TRAINS_PER_DIRECTION = 2;
-    const NOW_WINDOW = 15 * 1000;           // show "Now" when a train is this close
+    // TMB's arrival times run a little late: trains are usually at the platform about 15 s
+    // before the published time, so every time is brought forward by this much.
+    const ARRIVAL_OFFSET = 15 * 1000;
     const DEPARTED_AFTER = 20 * 1000;       // drop a train this long after its arrival time
+    const MIN_CLOCK_SKEW = 3 * 1000;        // correct the device clock only beyond this difference
     const TIME_ZONE = 'Europe/Madrid';
     const LANGUAGES = ['en', 'es', 'ca', 'zh'];
     const MAX_RECENT = 5;
@@ -27,7 +30,8 @@
         recent: 'metromaster.recent',
         lang: 'metromaster.lang',
         compact: 'metromaster.compact',
-        session: 'metromaster.session'
+        session: 'metromaster.session',
+        theme: 'metromaster.theme'          // plain string, also read by the inline script in index.html
     };
 
     const ICONS = {
@@ -70,6 +74,7 @@
     // --- DOM ---
     const $ = (id) => document.getElementById(id);
     const el = {
+        themeToggle: $('theme-toggle'),
         searchOpen: $('search-open'),
         favorites: $('favorites'),
         favoritesEdit: $('favorites-edit'),
@@ -124,6 +129,7 @@
     let loadController = null;
     let loadToken = 0;
     let credentialIndex = 0;
+    let clockSkew = 0;
     const scheduleCache = new Map();
     const renderedTimes = new WeakMap();
 
@@ -186,6 +192,18 @@
         return clockFormatter.format(timestamp);
     }
 
+    /** Current time on TMB's clock, so countdowns stay right on phones whose clock is off. */
+    function serverNow() {
+        return Date.now() + clockSkew;
+    }
+
+    /** "45s", "3m 05s" (same format as earlier versions). */
+    function formatWait(ms) {
+        const total = Math.floor(ms / 1000);
+        if (total < 60) return `${total}s`;
+        return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
+    }
+
     function formatDistance(meters) {
         if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
         const km = new Intl.NumberFormat(state.lang, { maximumFractionDigits: 1 }).format(meters / 1000);
@@ -238,6 +256,53 @@
         el.languages.querySelectorAll('button').forEach((button) => {
             button.setAttribute('aria-pressed', String(button.dataset.lang === state.lang));
         });
+        updateThemeButton();
+    }
+
+    // --- Theme ---
+    // index.html sets data-theme before the first paint; this keeps it in sync afterwards.
+    const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function savedTheme() {
+        try {
+            const theme = local && local.getItem(KEYS.theme);
+            return theme === 'light' || theme === 'dark' ? theme : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function currentTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        const background = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+        document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+            meta.setAttribute('content', background);
+        });
+        updateThemeButton();
+    }
+
+    function updateThemeButton() {
+        const label = currentTheme() === 'dark' ? t('lightMode') : t('darkMode');
+        el.themeToggle.setAttribute('aria-label', label);
+        el.themeToggle.title = label;
+    }
+
+    function toggleTheme() {
+        const theme = currentTheme() === 'dark' ? 'light' : 'dark';
+        try {
+            if (local) local.setItem(KEYS.theme, theme);
+        } catch {
+            // Not saved; the choice still applies until the page is closed.
+        }
+        applyTheme(theme);
+    }
+
+    function followSystemTheme() {
+        if (!savedTheme() && darkQuery) applyTheme(darkQuery.matches ? 'dark' : 'light');
     }
 
     function setLanguage(lang) {
@@ -581,7 +646,7 @@
                     if (!lineName || !destination) return;
                     const trains = (route.propers_trens || [])
                         .filter((train) => Number.isFinite(train.temps_arribada))
-                        .map((train) => ({ at: train.temps_arribada, scheduled: train.temps_teoric === true }));
+                        .map((train) => ({ at: train.temps_arribada - ARRIVAL_OFFSET, scheduled: train.temps_teoric === true }));
                     addTrains(board, station, lineName, route.color_linia || line.color_linia, destination, platform.id_sentit, trains);
                 });
             });
@@ -606,7 +671,7 @@
                 const [hours, minutes, seconds = '0'] = value.trim().split(':');
                 const offset = (Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)) * 1000;
                 if (!Number.isFinite(offset)) continue;
-                const at = dayStart + offset;
+                const at = dayStart + offset - ARRIVAL_OFFSET;
                 if (at > now - DEPARTED_AFTER) trains.push({ at, scheduled: true });
                 if (trains.length >= 6) break;
             }
@@ -624,20 +689,37 @@
         return false;
     }
 
+    /**
+     * Compares the device clock with the API's timestamp. The server time falls somewhere
+     * between sending and receiving, so only a difference larger than that window (and than
+     * MIN_CLOCK_SKEW) is corrected; small network jitter never moves the countdowns.
+     */
+    function measureClockSkew(serverTime, sentAt, receivedAt) {
+        if (!Number.isFinite(serverTime)) return;
+        const behind = serverTime - receivedAt;  // device clock is at least this much behind
+        const ahead = serverTime - sentAt;       // device clock is at least this much ahead (if negative)
+        if (behind > MIN_CLOCK_SKEW) clockSkew = behind;
+        else if (ahead < -MIN_CLOCK_SKEW) clockSkew = ahead;
+        else clockSkew = 0;
+        if (Math.abs(clockSkew) > 12 * 60 * 60 * 1000) clockSkew = 0;
+    }
+
     async function loadBoard(station, signal) {
         const board = new Map();
-        const now = Date.now();
         let liveError = null;
 
         try {
             // One request covers every line at the station. temps_teoric=true is what makes
             // L9/L10 return times at all (they only publish timetable-based arrivals).
+            const sentAt = Date.now();
             const data = await tmbFetch(ARRIVALS_URL, { estacions: station.codes.join(','), temps_teoric: 'true' }, signal);
+            measureClockSkew(data && data.timestamp, sentAt, Date.now());
             addArrivals(board, station, data);
         } catch (error) {
             if (error.name === 'AbortError') throw error;
             liveError = error;
         }
+        const now = serverNow();
 
         // Lines without upcoming trains (e.g. the Montjuïc funicular) fall back to the timetable.
         const missing = station.lines.filter((lineName) => !hasUpcoming(board.get(lineName), now));
@@ -759,7 +841,7 @@
         el.favoriteChips.innerHTML = stations.map((station) => `
             <li><button type="button" class="chip" data-slug="${station.slug}" aria-current="${station === state.station}">
                 <span>${escapeHTML(station.name)}</span>
-                <span class="chip-dots" aria-hidden="true">${station.lines.map((lineName) => `<i style="--line:${lineColor(lineName)}"></i>`).join('')}</span>
+                <span class="badges">${station.lines.map((lineName) => badgeHTML(lineName, true)).join('')}</span>
             </button></li>`).join('');
         keepCurrentChipVisible();
     }
@@ -814,10 +896,10 @@
     }
 
     function skeletonHTML(station) {
-        const row = '<li class="dir"><span class="dir-dest"><span class="skeleton skeleton--dest"></span></span><span class="dir-times"><span class="eta"><span class="skeleton skeleton--time"></span></span></span></li>';
+        const row = '<li class="dir"><span class="dir-main"><span class="skeleton skeleton--dest"></span></span><span class="dir-times"><span class="eta"><span class="skeleton skeleton--time"></span></span></span></li>';
         return station.lines.map((lineName) => `
             <section class="line" data-line="${escapeHTML(lineName)}" aria-hidden="true">
-                <div class="line-head">${badgeHTML(lineName)}</div>
+                ${badgeHTML(lineName)}
                 <ul class="dirs">${row}${row}</ul>
             </section>`).join('');
     }
@@ -826,19 +908,18 @@
         const directions = line
             ? [...line.directions.values()].sort((a, b) => a.order - b.order || a.destination.localeCompare(b.destination))
             : [];
-        const trains = directions.flatMap((direction) => direction.list);
-        const scheduledOnly = trains.length > 0 && trains.every((train) => train.scheduled);
-        const note = scheduledOnly ? escapeHTML(t('scheduledTimes')) : '';
         const rows = directions.map((direction) => `
             <li class="dir" data-destination="${escapeHTML(direction.destination)}" hidden>
-                <span class="dir-dest">${escapeHTML(direction.destination)}</span>
+                <span class="dir-main">
+                    <span class="dir-dest">${escapeHTML(direction.destination)}</span>
+                    <span class="dir-note">${escapeHTML(t('scheduled'))}</span>
+                </span>
                 <span class="dir-times"></span>
             </li>`).join('');
         return `
             <section class="line" data-line="${escapeHTML(lineName)}">
-                <div class="line-head">${badgeHTML(lineName)}${note ? `<span class="line-note">${note}</span>` : ''}</div>
+                ${badgeHTML(lineName)}
                 <ul class="dirs">${rows}<li class="dir dir--empty" hidden>${escapeHTML(t('noTrains'))}</li></ul>
-                ${note ? `<p class="line-note line-note--foot">${note}</p>` : ''}
             </section>`;
     }
 
@@ -864,16 +945,14 @@
 
     function etaHTML(train, now) {
         const wait = train.at - now;
-        let label;
-        if (wait <= NOW_WINDOW) label = t('now');
-        else if (wait < 60 * 1000) label = t('seconds', { n: Math.floor(wait / 1000) });
-        else label = t('minutes', { n: Math.floor(wait / 60000) });
-        return `<span class="eta${wait <= NOW_WINDOW ? ' is-now' : ''}"><span class="eta-wait">${escapeHTML(label)}</span><span class="eta-clock">${formatClock(train.at)}</span></span>`;
+        const arriving = wait < 1000;
+        const label = arriving ? t('now') : formatWait(wait);
+        return `<span class="eta${arriving ? ' is-now' : ''}"><span class="eta-wait">${escapeHTML(label)}</span><span class="eta-clock">${formatClock(train.at)}</span></span>`;
     }
 
     /** Runs every second: updates countdowns, rolls departed trains off, refreshes the status line. */
     function tick() {
-        const now = Date.now();
+        const now = serverNow();
         if (state.station && state.board) {
             let ranOut = false;
             el.results.querySelectorAll('.line').forEach((section) => {
@@ -893,6 +972,7 @@
                     visible++;
                     row.hidden = false;
                     row.dataset.shown = '1';
+                    row.classList.toggle('is-scheduled', upcoming[0].scheduled);
                     const times = row.querySelector('.dir-times');
                     const html = upcoming.map((train) => etaHTML(train, now)).join('');
                     if (renderedTimes.get(times) !== html) {
@@ -906,7 +986,7 @@
             // A direction just ran out of known trains: fetch fresh data early.
             if (ranOut) refreshSoon();
         }
-        renderStatus(now);
+        renderStatus();
     }
 
     function renderStatus(now = Date.now()) {
@@ -1315,6 +1395,11 @@
     }
 
     function bindEvents() {
+        el.themeToggle.addEventListener('click', toggleTheme);
+        if (darkQuery) {
+            if (darkQuery.addEventListener) darkQuery.addEventListener('change', followSystemTheme);
+            else if (darkQuery.addListener) darkQuery.addListener(followSystemTheme);
+        }
         el.searchOpen.addEventListener('click', openSearch);
         el.searchCancel.addEventListener('click', () => hideSheet());
         el.searchInput.addEventListener('input', () => {
@@ -1456,6 +1541,7 @@
         state.compact = queryParams.get('compact') === 'true'
             || (!queryParams.has('compact') && readJSON(local, KEYS.compact, false) === true);
         if (state.compact) el.results.classList.add('is-compact');
+        applyTheme(savedTheme() || currentTheme());
         applyTranslations();
         bindEvents();
         startTicking();
