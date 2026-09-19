@@ -1,219 +1,225 @@
 // Translations for TMB Metro Master
+// Placeholders in braces ({n}, {name}, {line}) are filled in by t() in script.js.
 const translations = {
     en: {
-        // Header
         title: "TMB Metro Master",
         subtitle: "Check the arrival times for the next trains.",
-        
-        // Navigation
-        chooseStation: "Choose a station:",
-        loadingStations: "Loading stations...",
-        favoriteStations: "Favorite Stations",
-        favoritesSessionOnly: "Bookmark this page to keep them.",
-        
-        // Buttons
-        copyLink: "Copy link to share",
-        linkCopied: "Link copied to clipboard!",
-        addedToFavorites: "Added to favorites",
-        removedFromFavorites: "Removed from favorites",
-        dataRefreshed: "Data refreshed",
-        refresh: "Refresh data",
-        refreshAria: "Refresh train times",
+        homeTitle: "Find your station",
+        language: "Language",
+        madeBy: "Made by",
+
+        // Search
+        searchPlaceholder: "Search for a station",
+        cancel: "Cancel",
+        allStations: "All stations",
+        recent: "Recent",
+        nearMe: "Stations near me",
+        nearby: "Nearby",
+        locating: "Finding your location…",
+        locationUnavailable: "Couldn't get your location",
+        noResults: "No stations found",
+
+        // Favorites
+        favorites: "Favorites",
+        edit: "Edit",
+        done: "Done",
         addToFavorites: "Add to favorites",
         removeFromFavorites: "Remove from favorites",
-        compactModeOn: "Compact view enabled",
-        compactModeOff: "Compact view disabled",
-        
-        // Train info
-        nextTrain: "Next train",
-        scheduled: "Scheduled",
-        destination: "Destination:",
-        lastUpdated: "Last updated:",
-        calculating: "Calculating...",
-        arrivingNow: "Arriving now",
-        in: "in",
-        invalidTime: "Invalid time",
-        
-        // Messages
-        loadingTrainData: "Loading train data...",
-        pleaseSelectStation: "Please select a station.",
-        couldNotGetInfo: "Could not get information. Please try again later.",
-        couldNotLoadStations: "Could not load stations. Please refresh the page to try again.",
-        noRealTimeData: "No real-time data available for this line.",
-        noLineInfo: "No line information found for this station.",
-        couldNotRetrieveData: "Could not retrieve data for the lines at this station.",
-        noMoreDepartures: "No more scheduled departures found for today.",
-        couldNotRetrieveScheduled: "Could not retrieve scheduled times.",
-        
-        // Footer
-        madeBy: "Made by",
-        
-        // Language selector
-        selectLanguage: "Language",
-        
-        // Aria labels
-        selectMetroStation: "Select a metro station",
+        addedToFavorites: "Added to favorites",
+        removedFromFavorites: "Removed from favorites",
+        favoritesHint: "Tap the star on a station to keep it here.",
+        favoritesNote: "Favorites are saved on this device and in this page's link.",
+        reorder: "Reorder {name}",
+        remove: "Remove {name}",
+        undo: "Undo",
+
+        // Station
+        share: "Share",
+        linkCopied: "Link copied",
+        refresh: "Refresh",
+        compactView: "Compact view",
+        all: "All",
+        showOnly: "Show only {line}",
+        showAll: "Show all lines",
         trainArrivalTimes: "Train arrival times",
-        filterBy: "Filter by"
+
+        // Status
+        updating: "Updating…",
+        updatedJustNow: "Updated just now",
+        updatedAgo: "Updated {n} min ago",
+        updateFailed: "Couldn't update",
+        offline: "You're offline",
+        retry: "Try again",
+
+        // Arrivals
+        now: "Now",
+        minutes: "{n} min",
+        seconds: "{n} s",
+        scheduledTimes: "Scheduled times",
+        noTrains: "No trains right now",
+        couldNotGetInfo: "Could not get information. Please try again later.",
+        couldNotLoadStations: "Could not load stations. Please refresh the page to try again."
     },
     es: {
-        // Header
         title: "TMB Metro Master",
-        subtitle: "Consulta los horarios de llegada de los próximos trenes.",
-        
-        // Navigation
-        chooseStation: "Elige una estación:",
-        loadingStations: "Cargando estaciones...",
-        favoriteStations: "Estaciones Favoritas",
-        favoritesSessionOnly: "Guarda esta página para mantenerlas.",
-        
-        // Buttons
-        copyLink: "Copiar enlace para compartir",
-        linkCopied: "¡Enlace copiado al portapapeles!",
-        addedToFavorites: "Añadido a favoritos",
-        removedFromFavorites: "Eliminado de favoritos",
-        dataRefreshed: "Datos actualizados",
-        refresh: "Actualizar datos",
-        refreshAria: "Actualizar horarios de trenes",
-        addToFavorites: "Añadir a favoritos",
-        removeFromFavorites: "Eliminar de favoritos",
-        compactModeOn: "Vista compacta activada",
-        compactModeOff: "Vista compacta desactivada",
-        
-        // Train info
-        nextTrain: "Próximo tren",
-        scheduled: "Programado",
-        destination: "Destino:",
-        lastUpdated: "Última actualización:",
-        calculating: "Calculando...",
-        arrivingNow: "Llegando ahora",
-        in: "en",
-        invalidTime: "Hora inválida",
-        
-        // Messages
-        loadingTrainData: "Cargando datos de trenes...",
-        pleaseSelectStation: "Por favor, selecciona una estación.",
-        couldNotGetInfo: "No se pudo obtener la información. Por favor, inténtalo de nuevo más tarde.",
-        couldNotLoadStations: "No se pudieron cargar las estaciones. Por favor, actualiza la página para intentarlo de nuevo.",
-        noRealTimeData: "No hay datos en tiempo real disponibles para esta línea.",
-        noLineInfo: "No se encontró información de línea para esta estación.",
-        couldNotRetrieveData: "No se pudieron recuperar los datos para las líneas de esta estación.",
-        noMoreDepartures: "No se encontraron más salidas programadas para hoy.",
-        couldNotRetrieveScheduled: "No se pudieron recuperar los horarios programados.",
-        
-        // Footer
+        subtitle: "Consulta la hora de llegada de los próximos trenes.",
+        homeTitle: "Encuentra tu estación",
+        language: "Idioma",
         madeBy: "Hecho por",
-        
-        // Language selector
-        selectLanguage: "Idioma",
-        
-        // Aria labels
-        selectMetroStation: "Seleccionar una estación de metro",
-        trainArrivalTimes: "Horarios de llegada de trenes",
-        filterBy: "Filtrar por"
+
+        searchPlaceholder: "Buscar estación",
+        cancel: "Cancelar",
+        allStations: "Todas las estaciones",
+        recent: "Recientes",
+        nearMe: "Estaciones cerca de mí",
+        nearby: "Cerca",
+        locating: "Buscando tu ubicación…",
+        locationUnavailable: "No se pudo obtener tu ubicación",
+        noResults: "No se ha encontrado ninguna estación",
+
+        favorites: "Favoritas",
+        edit: "Editar",
+        done: "Listo",
+        addToFavorites: "Añadir a favoritas",
+        removeFromFavorites: "Quitar de favoritas",
+        addedToFavorites: "Añadida a favoritas",
+        removedFromFavorites: "Quitada de favoritas",
+        favoritesHint: "Toca la estrella de una estación para tenerla aquí.",
+        favoritesNote: "Tus favoritas se guardan en este dispositivo y en el enlace de esta página.",
+        reorder: "Cambiar el orden de {name}",
+        remove: "Quitar {name}",
+        undo: "Deshacer",
+
+        share: "Compartir",
+        linkCopied: "Enlace copiado",
+        refresh: "Actualizar",
+        compactView: "Vista compacta",
+        all: "Todas",
+        showOnly: "Mostrar solo la {line}",
+        showAll: "Mostrar todas las líneas",
+        trainArrivalTimes: "Horarios de llegada de los trenes",
+
+        updating: "Actualizando…",
+        updatedJustNow: "Actualizado ahora mismo",
+        updatedAgo: "Actualizado hace {n} min",
+        updateFailed: "No se pudo actualizar",
+        offline: "Sin conexión",
+        retry: "Reintentar",
+
+        now: "Ahora",
+        minutes: "{n} min",
+        seconds: "{n} s",
+        scheduledTimes: "Horarios previstos",
+        noTrains: "Ahora no hay trenes",
+        couldNotGetInfo: "No se pudo obtener la información. Inténtalo de nuevo más tarde.",
+        couldNotLoadStations: "No se pudieron cargar las estaciones. Actualiza la página para intentarlo de nuevo."
     },
     ca: {
-        // Header
         title: "TMB Metro Master",
-        subtitle: "Consulta els horaris d'arribada dels propers trens.",
-        
-        // Navigation
-        chooseStation: "Tria una estació:",
-        loadingStations: "Carregant estacions...",
-        favoriteStations: "Estacions Favorites",
-        favoritesSessionOnly: "Guarda aquesta pàgina per mantenir-les.",
-        
-        // Buttons
-        copyLink: "Copia l'enllaç per compartir",
-        linkCopied: "Enllaç copiat al portapapeles!",
-        addedToFavorites: "Afegit a favorits",
-        removedFromFavorites: "Eliminat de favorits",
-        dataRefreshed: "Dades actualitzades",
-        refresh: "Actualitzar dades",
-        refreshAria: "Actualitzar horaris de trens",
-        addToFavorites: "Afegir a favorits",
-        removeFromFavorites: "Eliminar de favorits",
-        compactModeOn: "Vista compacta activada",
-        compactModeOff: "Vista compacta desactivada",
-        
-        // Train info
-        nextTrain: "Proper tren",
-        scheduled: "Programat",
-        destination: "Destinació:",
-        lastUpdated: "Última actualització:",
-        
-        // Messages
-        loadingTrainData: "Carregant dades de trens...",
-        pleaseSelectStation: "Si us plau, selecciona una estació.",
-        couldNotGetInfo: "No s'ha pogut obtenir la informació. Si us plau, torna-ho a intentar més tard.",
-        couldNotLoadStations: "No s'han pogut carregar les estacions. Si us plau, actualitza la pàgina per tornar-ho a intentar.",
-        noRealTimeData: "No hi ha dades en temps real disponibles per a aquesta línia.",
-        noLineInfo: "No s'ha trobat informació de línia per a aquesta estació.",
-        couldNotRetrieveData: "No s'han pogut recuperar les dades per a les línies d'aquesta estació.",
-        noMoreDepartures: "No s'han trobat més sortides programades per avui.",
-        couldNotRetrieveScheduled: "No s'han pogut recuperar els horaris programats.",
-        
-        // Footer
+        subtitle: "Consulta l'hora d'arribada dels propers trens.",
+        homeTitle: "Troba la teva estació",
+        language: "Idioma",
         madeBy: "Fet per",
-        
-        // Language selector
-        selectLanguage: "Idioma"
+
+        searchPlaceholder: "Cerca una estació",
+        cancel: "Cancel·la",
+        allStations: "Totes les estacions",
+        recent: "Recents",
+        nearMe: "Estacions a prop meu",
+        nearby: "A prop",
+        locating: "Cercant la teva ubicació…",
+        locationUnavailable: "No s'ha pogut obtenir la ubicació",
+        noResults: "No s'ha trobat cap estació",
+
+        favorites: "Preferides",
+        edit: "Edita",
+        done: "Fet",
+        addToFavorites: "Afegeix a preferides",
+        removeFromFavorites: "Treu de preferides",
+        addedToFavorites: "Afegida a preferides",
+        removedFromFavorites: "Treta de preferides",
+        favoritesHint: "Toca l'estrella d'una estació per tenir-la aquí.",
+        favoritesNote: "Les preferides es desen en aquest dispositiu i a l'enllaç d'aquesta pàgina.",
+        reorder: "Canvia l'ordre de {name}",
+        remove: "Treu {name}",
+        undo: "Desfés",
+
+        share: "Comparteix",
+        linkCopied: "Enllaç copiat",
+        refresh: "Actualitza",
+        compactView: "Vista compacta",
+        all: "Totes",
+        showOnly: "Mostra només la {line}",
+        showAll: "Mostra totes les línies",
+        trainArrivalTimes: "Horaris d'arribada dels trens",
+
+        updating: "Actualitzant…",
+        updatedJustNow: "Actualitzat ara mateix",
+        updatedAgo: "Actualitzat fa {n} min",
+        updateFailed: "No s'ha pogut actualitzar",
+        offline: "Sense connexió",
+        retry: "Torna-ho a provar",
+
+        now: "Ara",
+        minutes: "{n} min",
+        seconds: "{n} s",
+        scheduledTimes: "Horaris previstos",
+        noTrains: "Ara no hi ha trens",
+        couldNotGetInfo: "No s'ha pogut obtenir la informació. Torna-ho a provar més tard.",
+        couldNotLoadStations: "No s'han pogut carregar les estacions. Actualitza la pàgina per tornar-ho a provar."
     },
     zh: {
-        // Header
         title: "TMB Metro Master",
         subtitle: "查看下一班列车的到达时间。",
-        
-        // Navigation
-        chooseStation: "选择车站:",
-        loadingStations: "正在加载车站...",
-        favoriteStations: "收藏车站",
-        favoritesSessionOnly: "收藏此页面以保留它们。",
-        
-        // Buttons
-        copyLink: "复制链接分享",
-        linkCopied: "链接已复制到剪贴板！",
-        addedToFavorites: "已添加到收藏",
-        removedFromFavorites: "已从收藏中移除",
-        dataRefreshed: "数据已刷新",
-        refresh: "刷新数据",
-        refreshAria: "刷新列车时刻",
+        homeTitle: "查找车站",
+        language: "语言",
+        madeBy: "制作",
+
+        searchPlaceholder: "搜索车站",
+        cancel: "取消",
+        allStations: "所有车站",
+        recent: "最近查看",
+        nearMe: "附近的车站",
+        nearby: "附近",
+        locating: "正在获取位置…",
+        locationUnavailable: "无法获取你的位置",
+        noResults: "未找到车站",
+
+        favorites: "收藏",
+        edit: "编辑",
+        done: "完成",
         addToFavorites: "添加到收藏",
         removeFromFavorites: "从收藏中移除",
-        compactModeOn: "紧凑视图已启用",
-        compactModeOff: "紧凑视图已禁用",
-        
-        // Train info
-        nextTrain: "下一班",
-        scheduled: "时刻表",
-        destination: "目的地:",
-        lastUpdated: "最后更新:",
-        calculating: "计算中...",
-        arrivingNow: "即将到达",
-        in: "还有",
-        invalidTime: "无效时间",
-        
-        // Messages
-        loadingTrainData: "正在加载列车数据...",
-        pleaseSelectStation: "请选择一个车站。",
-        couldNotGetInfo: "无法获取信息。请稍后再试。",
-        couldNotLoadStations: "无法加载车站。请刷新页面重试。",
-        noRealTimeData: "此线路暂无实时数据。",
-        noLineInfo: "未找到此车站的线路信息。",
-        couldNotRetrieveData: "无法检索此车站线路的数据。",
-        noMoreDepartures: "今天没有更多计划发车。",
-        couldNotRetrieveScheduled: "无法检索时刻表。",
-        
-        // Footer
-        madeBy: "制作",
-        
-        // Language selector
-        selectLanguage: "语言",
-        
-        // Aria labels
-        selectMetroStation: "选择地铁站",
+        addedToFavorites: "已添加到收藏",
+        removedFromFavorites: "已从收藏中移除",
+        favoritesHint: "点击车站旁的星标，即可将其固定在这里。",
+        favoritesNote: "收藏保存在此设备和本页链接中。",
+        reorder: "调整 {name} 的顺序",
+        remove: "移除 {name}",
+        undo: "撤销",
+
+        share: "分享",
+        linkCopied: "链接已复制",
+        refresh: "刷新",
+        compactView: "紧凑视图",
+        all: "全部",
+        showOnly: "只显示 {line}",
+        showAll: "显示全部线路",
         trainArrivalTimes: "列车到达时间",
-        filterBy: "按筛选"
+
+        updating: "正在更新…",
+        updatedJustNow: "刚刚更新",
+        updatedAgo: "{n} 分钟前更新",
+        updateFailed: "更新失败",
+        offline: "当前离线",
+        retry: "重试",
+
+        now: "进站",
+        minutes: "{n} 分钟",
+        seconds: "{n} 秒",
+        scheduledTimes: "计划时刻",
+        noTrains: "暂无列车",
+        couldNotGetInfo: "无法获取信息。请稍后再试。",
+        couldNotLoadStations: "无法加载车站。请刷新页面重试。"
     }
 };
-

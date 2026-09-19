@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="description" content="Check real-time arrival times for TMB Metro trains in Barcelona">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
+    <meta name="format-detection" content="telephone=no">
     <title>TMB Metro Master</title>
-    
+
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-R65TDP0BHE"></script>
     <script>
@@ -15,7 +19,7 @@
 
       gtag('config', 'G-R65TDP0BHE');
     </script>
-    
+
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
@@ -23,69 +27,110 @@
     <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="images/android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="images/android-chrome-512x512.png">
-    
-    <!-- Choices.js CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+
+    <link rel="preconnect" href="https://api.tmb.cat" crossorigin>
+    <link rel="preload" href="estacions_linia.csv" as="fetch" crossorigin>
     <link rel="stylesheet" href="style.css">
+    <script src="translations.js" defer></script>
+    <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <div style="flex: 1;">
-                    <h1>
-                        <img src="https://static-web.tmb.cat/o/tmb-theme/images/logo_TMB_new.png" 
-                             alt="TMB Logo" 
-                             class="logo" 
-                             width="120" 
-                             height="40"
-                             loading="eager"> 
-                        <span data-translate="title">TMB Metro Master</span>
-                    </h1>
-                    <p data-translate="subtitle">Check the arrival times for the next trains.</p>
-                </div>
-            </div>
+    <div class="app">
+        <header class="topbar">
+            <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="3" transform="rotate(45 12 12)" fill="#e2231a"/>
+                <path d="M7.4 15.4V8.6h2l2.6 3.5 2.6-3.5h2v6.8h-2v-3.7L12 14.9l-2.6-3.2v3.7z" fill="#fff"/>
+            </svg>
+            <span class="brand-name" data-i18n="title">TMB Metro Master</span>
         </header>
 
-        <main>
-            <div id="favorites-section" class="favorites-section" style="display: none;">
-                <div class="favorites-header">
-                    <span data-translate="favoriteStations">Favorite Stations</span>
-                </div>
-                <div id="favorites-container" class="favorites-container"></div>
+        <button type="button" class="search-trigger" id="search-open" aria-haspopup="dialog">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
+            <span data-i18n="searchPlaceholder">Search for a station</span>
+        </button>
+
+        <section class="favorites" id="favorites" hidden>
+            <div class="section-head">
+                <h2 data-i18n="favorites">Favorites</h2>
+                <button type="button" class="text-btn" id="favorites-edit" data-i18n="edit">Edit</button>
             </div>
-            
-            <div class="selection-form">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                    <label for="station-select" style="flex: 1;" data-translate="chooseStation">Choose a station:</label>
-                    <div class="language-selector">
-                        <select id="language-select" data-translate-aria="selectLanguage" aria-label="Select language">
-                            <option value="en">English</option>
-                            <option value="es">Español</option>
-                            <option value="ca">Català</option>
-                            <option value="zh">中文</option>
-                        </select>
+            <div class="chip-scroller">
+                <ul class="chip-row" id="favorite-chips"></ul>
+            </div>
+        </section>
+
+        <main class="main">
+            <section class="station" id="station" hidden>
+                <div class="station-head">
+                    <h1 class="station-name" id="station-name"></h1>
+                    <div class="station-actions">
+                        <button type="button" class="icon-btn star-btn" id="favorite-toggle">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg>
+                        </button>
+                        <button type="button" class="icon-btn" id="share-btn" data-i18n-label="share">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3.8M8 7.6l4-3.8 4 3.8"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></svg>
+                        </button>
                     </div>
                 </div>
-                <select id="station-select" name="stations" data-translate-aria="selectMetroStation" aria-label="Select a metro station">
-                    <option value="" data-translate="loadingStations">Loading stations...</option>
-                </select>
-            </div>
+                <div class="station-meta">
+                    <span class="status" id="status"></span>
+                    <button type="button" class="icon-btn icon-btn--small" id="refresh-btn" data-i18n-label="refresh">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.8 4.5v3.9h-3.9"/></svg>
+                    </button>
+                    <button type="button" class="icon-btn icon-btn--small density-btn" id="density-btn" data-i18n-label="compactView" aria-pressed="false">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M8.5 4.5 12 8l3.5-3.5M8.5 19.5 12 16l3.5 3.5"/></svg>
+                    </button>
+                </div>
+                <div class="line-filters" id="line-filters" role="group" hidden></div>
+                <div class="results" id="results" role="region" data-i18n-label="trainArrivalTimes"></div>
+            </section>
 
-            <div id="timestamp-container" aria-live="polite" aria-atomic="true"></div>
-            <div id="results-container" role="region" aria-live="polite" data-translate-aria="trainArrivalTimes" aria-label="Train arrival times">
-            </div>
-            <div id="error-message" class="error" role="alert" aria-live="assertive"></div>
+            <section class="home" id="home" hidden>
+                <h1 class="home-title" data-i18n="homeTitle">Find your station</h1>
+                <p class="home-text" data-i18n="subtitle">Check the arrival times for the next trains.</p>
+                <button type="button" class="pill-btn" id="home-nearby">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 4 11l7 2 2 7z"/></svg>
+                    <span data-i18n="nearMe">Stations near me</span>
+                </button>
+                <p class="home-hint" id="home-hint" data-i18n="favoritesHint" hidden></p>
+                <div id="home-recent"></div>
+            </section>
+
+            <p class="page-error" id="page-error" role="alert" hidden></p>
         </main>
-        <footer><span data-translate="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer" class="footer-link">@bodiwho</a> <span class="version">v2.4</span></footer>
+
+        <footer class="footer">
+            <nav class="languages" id="languages" data-i18n-label="language">
+                <button type="button" data-lang="en" lang="en">English</button>
+                <button type="button" data-lang="es" lang="es">Español</button>
+                <button type="button" data-lang="ca" lang="ca">Català</button>
+                <button type="button" data-lang="zh" lang="zh">中文</button>
+            </nav>
+            <p class="credit"><span data-i18n="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer">@bodiwho</a> <span class="version">v3.0</span></p>
+        </footer>
     </div>
 
-    <!-- Toast notifications -->
-    <div id="toast-container" class="toast-container"></div>
+    <dialog class="sheet sheet--search" id="search-dialog" data-i18n-label="searchPlaceholder">
+        <div class="search-bar">
+            <label class="search-field">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
+                <input type="search" id="search-input" data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder"
+                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+            </label>
+            <button type="button" class="text-btn" id="search-cancel" data-i18n="cancel">Cancel</button>
+        </div>
+        <div class="search-results" id="search-results"></div>
+    </dialog>
 
-    <!-- Choices.js JS -->
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-    <script src="translations.js"></script>
-    <script src="script.js"></script>
+    <dialog class="sheet sheet--bottom" id="favorites-dialog" aria-labelledby="favorites-dialog-title">
+        <div class="sheet-head">
+            <h2 id="favorites-dialog-title" data-i18n="favorites">Favorites</h2>
+            <button type="button" class="text-btn" id="favorites-done" data-i18n="done">Done</button>
+        </div>
+        <ul class="edit-list" id="favorites-edit-list"></ul>
+        <p class="sheet-note" data-i18n="favoritesNote">Favorites are saved on this device and in this page's link.</p>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

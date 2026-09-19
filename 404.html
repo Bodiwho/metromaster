@@ -2,77 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Check real-time arrival times for TMB Metro trains in Barcelona">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
     <title>TMB Metro Master</title>
-    
-    <!-- Favicons -->
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="images/android-chrome-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="images/android-chrome-512x512.png">
-    
-    <!-- Choices.js CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
     <script>
-        // Redirect 404s to index.html while preserving the path
-        // This allows GitHub Pages to serve the SPA correctly
-        (function() {
-            var path = window.location.pathname;
-            // If we're on a 404 page and the path isn't index.html, redirect
-            if (path !== '/' && path !== '/index.html' && !path.endsWith('.html')) {
-                // Preserve the path in the redirect
-                var newPath = '/index.html' + path;
-                window.location.replace(newPath);
+        // Old path-style links (/station-name or /index.html/station-name) are turned into the
+        // hash format the app uses (/#station-name), keeping ?lang= and any favorites.
+        (function () {
+            var path = location.pathname.replace(/\/index\.html(?=\/|$)/, '');
+            var segments = path.split('/').filter(Boolean);
+            var slug = segments.length ? segments[segments.length - 1].toLowerCase() : '';
+            var hash = location.hash.replace(/^#/, '');
+            var hashHasStation = hash.split('&').some(function (part) { return part && part.indexOf('=') === -1; });
+            if (slug && !hashHasStation && !/\.[a-z0-9]+$/.test(slug)) {
+                hash = hash ? slug + '&' + hash : slug;
             }
+            location.replace('/' + location.search + (hash ? '#' + hash : ''));
         })();
     </script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>
-                <img src="https://static-web.tmb.cat/o/tmb-theme/images/logo_TMB_new.png" 
-                     alt="TMB Logo" 
-                     class="logo" 
-                     width="120" 
-                     height="40"
-                     loading="eager"> 
-                TMB Metro Master
-            </h1>
-            <p>Check the arrival times for the next trains.</p>
-        </header>
-
-        <main>
-            <div class="selection-form">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                    <label for="station-select" style="flex: 1;">Choose a station:</label>
-                    <button id="copy-link-btn" class="copy-link-btn" title="Copy link to share" aria-label="Copy link to share current station">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                        </svg>
-                    </button>
-                </div>
-                <select id="station-select" name="stations" aria-label="Select a metro station">
-                    <option value="">Loading stations...</option>
-                </select>
-            </div>
-
-            <div id="timestamp-container" aria-live="polite" aria-atomic="true"></div>
-            <div id="results-container" role="region" aria-live="polite" aria-label="Train arrival times">
-            </div>
-            <div id="error-message" class="error" role="alert" aria-live="assertive"></div>
-        </main>
-        <footer>Made by @bodi <span class="version">v1.1</span></footer>
-    </div>
-
-    <!-- Choices.js JS -->
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-    <script src="script.js"></script>
+    <p><a href="/">TMB Metro Master</a></p>
 </body>
 </html>
-
