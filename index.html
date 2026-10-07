@@ -8,6 +8,11 @@
     <meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
     <meta name="format-detection" content="telephone=no">
+    <!-- Added to the home screen, the page opens as a full-screen app (no browser bars).
+         The saved link, with its station and favorites, is what the icon opens. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>TMB Metro Master</title>
     <script>
       // Opening a station seen before on this device: ask TMB for its times right away instead of
@@ -40,6 +45,8 @@
           theme = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         document.documentElement.setAttribute('data-theme', theme);
+        // Older iOS versions report full-screen mode here rather than through display-mode.
+        if (window.navigator.standalone === true) document.documentElement.classList.add('is-standalone');
       })();
     </script>
 
@@ -150,7 +157,7 @@
                 <button type="button" data-lang="ca" lang="ca">Català</button>
                 <button type="button" data-lang="zh" lang="zh">中文</button>
             </nav>
-            <p class="credit"><span data-i18n="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer">@bodiwho</a> <span class="version">v3.3</span></p>
+            <p class="credit"><span data-i18n="madeBy">Made by</span> <a href="https://www.instagram.com/bodiwho/" target="_blank" rel="noopener noreferrer">@bodiwho</a> <span class="version">v3.4</span></p>
         </footer>
     </div>
 
